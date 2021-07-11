@@ -8,7 +8,7 @@ pub struct User {
 use super::schema::users;
 
 #[derive(Insertable)]
-#[table_name="users"]
+#[table_name = "users"]
 pub struct NewUser<'a> {
     pub id: &'a str,
     pub pass: &'a str,

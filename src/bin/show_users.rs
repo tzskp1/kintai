@@ -1,15 +1,16 @@
-extern crate kintai;
 extern crate diesel;
+extern crate kintai;
 
+use self::diesel::prelude::*;
 use self::kintai::*;
 use self::models::*;
-use self::diesel::prelude::*;
 
 fn main() {
     use kintai::schema::users::dsl::*;
 
     let connection = establish_connection();
-    let results = users.limit(5)
+    let results = users
+        .limit(5)
         .load::<User>(&connection)
         .expect("Error loading posts");
 

@@ -1,5 +1,5 @@
-extern crate kintai;
 extern crate diesel;
+extern crate kintai;
 
 use self::kintai::*;
 use std::io::{stdin, Read};
