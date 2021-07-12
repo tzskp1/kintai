@@ -8,7 +8,7 @@ import { BrowserRouter, Route, Switch, Redirect } from "react-router-dom";
 ReactDOM.render(
     <BrowserRouter>
         <Switch>
-            <Route path="/empolyee" component={Employee} />
+            <Route path="/employee" component={Employee} />
             <Route path="/login" component={Login} />
             <Redirect from="/" to="/login" />
         </Switch>
