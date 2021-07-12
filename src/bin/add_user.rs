@@ -15,7 +15,7 @@ fn main() {
     let mut pass = String::new();
     stdin().read_to_string(&mut pass).unwrap();
 
-    let user = create_user(&connection, id, &pass, &true).unwrap();
+    let user = create_user(&connection.unwrap().get().unwrap(), id, &pass, &true).unwrap();
     println!("\nSaved user with id {}", user.id);
 }
 

@@ -11,7 +11,7 @@ fn main() {
     let connection = establish_connection();
     let results = users
         .limit(5)
-        .load::<User>(&connection)
+        .load::<User>(&connection.unwrap().get().unwrap())
         .expect("Error loading posts");
 
     println!("Displaying {} users", results.len());
