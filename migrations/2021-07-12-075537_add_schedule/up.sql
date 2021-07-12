@@ -1,10 +1,10 @@
 -- Your SQL goes here
 CREATE TABLE schedules (
+  id BIGSERIAL NOT NULL,
   username VARCHAR NOT NULL,
-  start_time TIMESTAMP WITH TIME ZONE NOT NULL,
+  start_time TIMESTAMP WITH TIME ZONE NOT NULL PRIMARY KEY,
   end_time TIMESTAMP WITH TIME ZONE NOT NULL,
   permitted BOOLEAN NOT NULL DEFAULT 'f',
   FOREIGN KEY (username) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
-  CHECK (end_time > start_time),
-  PRIMARY KEY(start_time, end_time)
+  CHECK (end_time > start_time)
 )

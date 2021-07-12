@@ -63,7 +63,7 @@ interface Props {
     window?: () => Window;
 }
 
-export default function ResponsiveDrawer(props: Props) {
+export default function Employee(props: Props) {
     const { window } = props;
     const classes = useStyles();
     const theme = useTheme();

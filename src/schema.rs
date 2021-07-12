@@ -1,5 +1,6 @@
 table! {
-    schedules (start_time, end_time) {
+    schedules (start_time) {
+        id -> Int8,
         username -> Varchar,
         start_time -> Timestamptz,
         end_time -> Timestamptz,
@@ -17,4 +18,7 @@ table! {
 
 joinable!(schedules -> users (username));
 
-allow_tables_to_appear_in_same_query!(schedules, users,);
+allow_tables_to_appear_in_same_query!(
+    schedules,
+    users,
+);

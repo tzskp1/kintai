@@ -26,3 +26,7 @@
 　ざっと起こしたので他にも要素はあるでしょうが、参考までにどうぞ。自身で経験してきた業態に特化するのもエピソード込で面白いと思います。
 
 https://note.com/makaibito/n/naa4852c86d44#HCw1z
+
+
+curl -H "Content-Type: application/json" -H "Authorization: bearer $(curl -H "Content-Type: application/json" -d '{"id":"root", "pass": "pass"}' 127.0.0.1:8080/api/login | jq -r .token)" -d '{"username":"root", "start_time": "2021-07-14T16:25:07.742", "end_time": "2021-07-15T17:25:07.742"}' -v 127.0.0.1:8080/api/schedules
+curl -H "Authorization: bearer $(curl -H "Content-Type: application/json" -d '{"id":"root", "pass": "pass"}' 127.0.0.1:8080/api/login | jq -r .token)" -v 127.0.0.1:8080/api/schedules

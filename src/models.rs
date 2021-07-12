@@ -21,6 +21,7 @@ use serde::Serialize;
 #[derive(Queryable, Associations, Serialize, Debug)]
 #[belongs_to(User, foreign_key = "username")]
 pub struct Schedule {
+    pub id: i64,
     pub username: String,
     pub start_time: chrono::NaiveDateTime,
     pub end_time: chrono::NaiveDateTime,
