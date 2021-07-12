@@ -49,11 +49,7 @@ async fn login_api(
 ) -> Result<HttpResponse, error::Error> {
     login(&conn.get().unwrap(), &user.id, &user.pass)
         .ok_or(error::ErrorUnauthorized("unauthorized error"))
-        .and_then(|logged_user| {
-            generate_token(&logged_user)
-                .map(|t| HttpResponse::Ok().json(json!({ "token": t, "token_type": "bearer" })))
-                .map_err(|_| error::Error::from(MyError::InternalError))
-        })
+        .map(|t| HttpResponse::Ok().json(json!({ "token": t, "token_type": "bearer" })))
 }
 
 #[actix_web::main]
