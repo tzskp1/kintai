@@ -14,3 +14,15 @@ pub struct NewUser<'a> {
     pub pass: &'a str,
     pub isadmin: &'a bool,
 }
+
+use super::schema::schedules;
+
+use serde::Serialize;
+#[derive(Queryable, Associations, Serialize, Debug)]
+#[belongs_to(User, foreign_key = "username")]
+pub struct Schedule {
+    pub username: String,
+    pub start_time: chrono::NaiveDateTime,
+    pub end_time: chrono::NaiveDateTime,
+    pub permitted: bool,
+}

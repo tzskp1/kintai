@@ -7,7 +7,7 @@ use diesel::{
     pg::PgConnection,
     r2d2::{self, ConnectionManager},
 };
-use kintai::{establish_connection, login};
+use kintai::{create_schedule, establish_connection, login};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::env;
@@ -20,6 +20,13 @@ async fn index(_: HttpRequest) -> Result<NamedFile> {
 pub struct UserPass {
     pub id: String,
     pub pass: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct StartEnd {
+    pub username: String,
+    pub start_time: chrono::NaiveDateTime,
+    pub end_time: chrono::NaiveDateTime,
 }
 
 #[derive(Debug, Display, Error)]
@@ -46,9 +53,29 @@ async fn login_api(
     user: web::Json<UserPass>,
     conn: web::Data<r2d2::Pool<ConnectionManager<PgConnection>>>,
 ) -> Result<HttpResponse, error::Error> {
-    login(&conn.get().unwrap(), &user.id, &user.pass)
-        .ok_or(error::ErrorUnauthorized("unauthorized error"))
-        .map(|t| HttpResponse::Ok().json(json!({ "token": t, "token_type": "bearer" })))
+    conn.get()
+        .ok()
+        .ok_or(error::Error::from(MyError::InternalError))
+        .and_then(|conn| {
+            login(&conn, &user.id, &user.pass)
+                .ok_or(error::ErrorUnauthorized("unauthorized error"))
+                .map(|t| HttpResponse::Ok().json(json!({ "token": t, "token_type": "bearer" })))
+        })
+}
+
+async fn add_schedule(
+    se: web::Json<StartEnd>,
+    conn: web::Data<r2d2::Pool<ConnectionManager<PgConnection>>>,
+) -> Result<HttpResponse, error::Error> {
+    conn.get()
+        .ok()
+        .ok_or(error::Error::from(MyError::InternalError))
+        .and_then(|conn| {
+            create_schedule(&conn, &se.username, &se.start_time, &se.end_time, &false)
+                .ok()
+                .ok_or(error::Error::from(MyError::InternalError))
+                .map(|x| HttpResponse::Ok().json(x))
+        })
 }
 
 #[actix_web::main]
@@ -63,6 +90,7 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .data(pool.clone())
             .route("/api/login", web::post().to(login_api))
+            .route("/api/schedule", web::post().to(add_schedule))
             .route("/", web::get().to(index))
             .service(Files::new("/", "./build").prefer_utf8(true))
     })
