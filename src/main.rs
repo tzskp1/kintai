@@ -1,19 +1,18 @@
 use actix_files::{Files, NamedFile};
 use actix_web::HttpResponse;
-use actix_web::{dev::HttpResponseBuilder, get, http::header, http::StatusCode};
+use actix_web::{dev::HttpResponseBuilder, http::header, http::StatusCode};
 use actix_web::{error, web, App, HttpRequest, HttpServer, Responder, Result};
 use derive_more::{Display, Error};
 use diesel::{
     pg::PgConnection,
     r2d2::{self, ConnectionManager},
 };
-use kintai::{establish_connection, generate_token, login};
+use kintai::{establish_connection, login};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::env;
-use std::path::PathBuf;
 
-async fn index(req: HttpRequest) -> Result<NamedFile> {
+async fn index(_: HttpRequest) -> Result<NamedFile> {
     Ok(NamedFile::open("./build/index.html")?)
 }
 
