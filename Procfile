@@ -1,2 +1,2 @@
 web: ./target/release/kintai
-release: ./target/release/diesel migration run && cargo run --bin add_root
+release: ./target/release/diesel migration run && ./target/release/add_root
