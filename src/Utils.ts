@@ -1,3 +1,11 @@
+export const seq = (i: number) => {
+    const dst: number[] = [];
+    let j = 0;
+    for (j = 0; j < i; j++) {
+        dst.push(j);
+    }
+    return dst;
+};
 
 export const decodeJwt = (token: string) => {
     const base64Url = token.split('.')[1];
