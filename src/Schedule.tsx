@@ -101,13 +101,15 @@ export default function Schedule(props: Props) {
         const gy = useRef(0);
         const ox = useRef(0);
         const oy = useRef(0);
+        const sx = useRef(0);
+        const sy = useRef(0);
         const onMove = (e: any) => {
             if (!isDrg.current) return;
-            let bd = e.target.ownerDocument.scrollingElement;
             // Ad hoc !!
-            let h = bd.scrollHeight - bd.clientHeight - bd.scrollTop;
-            let w = bd.scrollLeft;
-            setX(e.clientX + w - gx.current - ox.current);
+            let bd = e.target.ownerDocument.scrollingElement;
+            let h = sy.current - bd.scrollTop;
+            let w = sx.current - bd.scrollLeft;
+            setX(e.clientX - w - gx.current - ox.current);
             setY(e.clientY - h - gy.current - oy.current);
         }
         const onUp = (e: any) => {
@@ -120,18 +122,18 @@ export default function Schedule(props: Props) {
         }
         const onDown = (e: any) => {
             if (isFirst.current) {
+                let bd = e.target.ownerDocument.scrollingElement;
                 let { left, top } = e.target.getBoundingClientRect()
                 gx.current = left;
                 gy.current = top;
+                sy.current = bd.scrollTop;
+                sx.current = bd.scrollLeft;
                 isFirst.current = false;
             }
             ox.current = e.nativeEvent.offsetX;
             oy.current = e.nativeEvent.offsetY;
-            // gx.current = e.clientX;
-            // gy.current = e.clientY;
             isDrg.current = true;
             let el = e.target.ownerDocument;
-            // console.log(el);
             el.addEventListener('mouseup', onUp, { capture: true });
             el.addEventListener('mousemove', onMove, { capture: true });
         }
