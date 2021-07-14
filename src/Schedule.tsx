@@ -24,7 +24,7 @@ import { makeStyles, useTheme, Theme, createStyles } from '@material-ui/core/sty
 import { BrowserRouter, Route, Switch, Redirect, Link } from "react-router-dom";
 import Box from '@material-ui/core/Box';
 import { sizing, palette, positions } from '@material-ui/system';
-import { seq } from './Utils';
+import { getSchedules, seq, Shift } from './Utils';
 import { useResizeDetector } from 'react-resize-detector';
 
 const drawerWidth = 240;
@@ -57,11 +57,6 @@ interface Props {
      */
     window?: () => Window;
 }
-type Shift = {
-    startDate: Date;
-    endDate: Date;
-    id: number
-}
 
 const appointments = [
     {
@@ -84,7 +79,25 @@ const toDate = (d: Date) => {
     return t;
 }
 
-const DragBox = ({ procXY = (x) => x, onDown = (x) => { return new Promise(() => { return; }); }, width = 100, height = 50, initX = 300, initY = 100 }: { procXY?: (_: [number, number]) => [number, number], onDown?: (_: [number, number]) => Promise<void>, width?: number, height?: number, initX?: number, initY?: number }) => {
+type DragBoxProp = {
+    procXY?: (_: [number, number]) => [number, number],
+    onDown?: (_: [number, number]) => Promise<void>,
+    onUp?: (_: [number, number]) => Promise<void>,
+    width?: number,
+    height?: number,
+    initX?: number,
+    initY?: number
+}
+
+type MultiBoxProp = {
+    onCrash?: (_: number) => Promise<void>,
+    procXY?: (_: [number, number]) => [number, number],
+    onDown?: (_: [number, number]) => Promise<void>,
+    onUp?: (_: [number, number]) => Promise<void>,
+    boxes: [number, number, number, number][]
+}
+
+const DragBox = ({ procXY = (x) => x, onUp = (x) => { return new Promise(() => { return; }); }, onDown = (x) => { return new Promise(() => { return; }); }, width = 100, height = 50, initX = 300, initY = 100 }: DragBoxProp) => {
     const [x, setX] = useState(initX);
     const [y, setY] = useState(initY);
     const isDrg = useRef(false);
@@ -102,32 +115,53 @@ const DragBox = ({ procXY = (x) => x, onDown = (x) => { return new Promise(() =>
         setX(px);
         setY(py);
     }, [procXY, setX, setY]);
-    const onUp = useCallback((e: any) => {
+    const _onUp = useCallback(async (e: any) => {
         ox.current = 0;
         oy.current = 0;
         isDrg.current = false;
         let el = e.target.ownerDocument;
         el.removeEventListener('mousemove', onMove, { capture: true });
-        el.removeEventListener('mouseup', onUp, { capture: true });
-    }, [onMove]);
+        el.removeEventListener('mouseup', _onUp, { capture: true });
+        await onUp([x, y]);
+    }, [onUp, onMove, x, y]);
     const _onDown = useCallback(async (e: any) => {
         ox.current = e.nativeEvent.offsetX;
         oy.current = e.nativeEvent.offsetY;
         isDrg.current = true;
         let el = e.target.ownerDocument;
-        el.addEventListener('mouseup', onUp, { capture: true });
+        el.addEventListener('mouseup', _onUp, { capture: true });
         el.addEventListener('mousemove', onMove, { capture: true });
         await onDown([x, y]);
-    }, [onDown, onUp, onMove, x, y]);
+    }, [onDown, _onUp, onMove, x, y]);
     return (
-        <Box onMouseUp={onUp} onMouseDown={_onDown} width={width} height={height} sx={{ bgcolor: "red", position: 'absolute', left: x, top: y, }} />
+        <Box onMouseUp={_onUp} onMouseDown={_onDown} width={width} height={height} sx={{ bgcolor: "red", position: 'absolute', left: x, top: y, }} />
     );
 }
 
-const col = 100;
+const MultiBox = ({ boxes, onCrash = (x) => { return new Promise(() => { return; }); }, procXY = (x) => x, onUp = (x) => { return new Promise(() => { return; }); }, onDown = (x) => { return new Promise(() => { return; }); } }: MultiBoxProp) => {
+    const [bxs, setBxs] = useState(boxes);
+    const [num, setNum] = useState(-1);
+    useEffect(() => {
+        setNum(-1);
+        setBxs(boxes);
+    }, [boxes]);
+    return (
+        <div>
+            {bxs.map((b, i, _) => {
+                const [x, y, w, h] = b;
+                const _onDown = async (xy: [number, number]) => {
+                    setNum(i);
+                    await onCrash(i);
+                    await onDown(xy);
+                };
+                return (num === -1 || num === i ? <DragBox initX={x} initY={y} width={w} height={h} onDown={_onDown} procXY={procXY} onUp={onUp} /> : undefined);
+            })}
+        </div>
+    );
+}
 
 export default function Schedule(props: Props) {
-    const [data, setData] = useState<Shift[]>(appointments);
+    const [data, setData] = useState<Shift[]>([]);
     const [currentDate, setDate] = useState(new Date());
     const startDate = toDate(addDay(currentDate, -currentDate.getDay()));
     const classes = useStyles();
@@ -155,7 +189,14 @@ export default function Schedule(props: Props) {
         setRh(rect.height);
     }, [setCw, setRh, setX, setY]);
     const { ref } = useResizeDetector({ onResize });
-    useEffect(onResize, []);
+    useEffect(onResize, [onResize]);
+    useEffect(() => {
+        (async () => {
+            let schs = await getSchedules();
+            if (schs) setData(schs);
+            console.log(schs);
+        })();
+    }, []);
 
     return (
         <>
@@ -163,13 +204,13 @@ export default function Schedule(props: Props) {
                 <Table >
                     <TableHead>
                         <TableRow>
-                            <TableCell style={{ borderLeft: '1px solid' }} width={cw}>Dessert</TableCell>
-                            <TableCell style={{ borderLeft: '1px solid' }} width={cw}>Calories</TableCell>
-                            <TableCell style={{ borderLeft: '1px solid' }} width={cw}>Fat&nbsp;(g)</TableCell>
-                            <TableCell style={{ borderLeft: '1px solid' }} width={cw}>Carbs&nbsp;(g)</TableCell>
-                            <TableCell style={{ borderLeft: '1px solid' }} width={cw}>Protein&nbsp;(g)</TableCell>
-                            <TableCell style={{ borderLeft: '1px solid' }} width={cw}>Carbs&nbsp;(g)</TableCell>
-                            <TableCell style={{ borderLeft: '1px solid' }} width={cw}>Protein&nbsp;(g)</TableCell>
+                            <TableCell style={{ borderLeft: '1px solid' }} width={cw}>{startDate.getDate()}</TableCell>
+                            <TableCell style={{ borderLeft: '1px solid' }} width={cw}>{addDay(startDate, 1).getDate()}</TableCell>
+                            <TableCell style={{ borderLeft: '1px solid' }} width={cw}>{addDay(startDate, 2).getDate()}</TableCell>
+                            <TableCell style={{ borderLeft: '1px solid' }} width={cw}>{addDay(startDate, 3).getDate()}</TableCell>
+                            <TableCell style={{ borderLeft: '1px solid' }} width={cw}>{addDay(startDate, 4).getDate()}</TableCell>
+                            <TableCell style={{ borderLeft: '1px solid' }} width={cw}>{addDay(startDate, 5).getDate()}</TableCell>
+                            <TableCell style={{ borderLeft: '1px solid' }} width={cw}>{addDay(startDate, 6).getDate()}</TableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>
@@ -190,9 +231,8 @@ export default function Schedule(props: Props) {
                 </Table>
             </Paper >
             <div>
+                <MultiBox boxes={[[300, 300, cw, rh], [500, 500, cw, rh]]} />
                 <DragBox width={cw} initX={x} initY={y} />
-                <DragBox width={cw} />
-                <DragBox width={cw} />
             </div>
         </>
     );

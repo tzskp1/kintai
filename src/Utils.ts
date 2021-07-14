@@ -38,7 +38,7 @@ export const postSchedule = async (username: string, startTime: Date, endTime: D
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'Authorization': token,
+            'Authorization': "bearer " + token,
         },
         body: JSON.stringify({
             username,
@@ -49,6 +49,38 @@ export const postSchedule = async (username: string, startTime: Date, endTime: D
     if (res.ok) {
         let ret = await res.json();
         return ret.id as number;
+    } else {
+        return undefined;
+    }
+};
+
+export type Shift = {
+    start_time: Date;
+    end_time: Date;
+    permitted: boolean;
+    username: string;
+    id: number
+}
+
+export const getSchedules = async () => {
+    let token = getToken();
+    if (!token) return undefined;
+    let res = await fetch("/api/schedules", {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': "bearer " + token,
+        },
+    });
+    if (res.ok) {
+        let ret = await res.json();
+        return ret.map((x: any) => {
+            return {
+                ...x,
+                start_time: new Date(x.start_time + 'Z'),
+                end_time: new Date(x.end_time + 'Z')
+            }
+        }) as Shift[];
     } else {
         return undefined;
     }
