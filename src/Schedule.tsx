@@ -84,6 +84,55 @@ const toDate = (d: Date) => {
     return t;
 }
 
+const DragBox = ({ procXY = (x) => x, width = 100, height = 50 }: { procXY?: (_: [number, number]) => [number, number], width?: number, height?: number }) => {
+    const [x, setX] = useState(0);
+    const [y, setY] = useState(0);
+    const isDrg = useRef(false);
+    const gx = useRef(0);
+    const gy = useRef(0);
+    const ox = useRef(0);
+    const oy = useRef(0);
+    const onMove = (e: any) => {
+        if (!isDrg.current) return;
+        // Ad hoc !!
+        let bd = e.target.ownerDocument.scrollingElement;
+        const [px, py] = procXY([e.clientX + bd.scrollLeft - ox.current, e.clientY + bd.scrollTop - oy.current]);
+        setX(px - gx.current);
+        setY(py - gy.current);
+        // console.log(e.clientX + bd.scrollLeft - ox.current, e.clientY + bd.scrollTop - oy.current);
+    }
+    const onUp = (e: any) => {
+        ox.current = 0;
+        oy.current = 0;
+        isDrg.current = false;
+        let el = e.target.ownerDocument;
+        el.removeEventListener('mousemove', onMove, { capture: true });
+        el.removeEventListener('mouseup', onUp, { capture: true });
+    }
+    const onDown = (e: any) => {
+        ox.current = e.nativeEvent.offsetX;
+        oy.current = e.nativeEvent.offsetY;
+        isDrg.current = true;
+        let el = e.target.ownerDocument;
+        el.addEventListener('mouseup', onUp, { capture: true });
+        el.addEventListener('mousemove', onMove, { capture: true });
+    }
+    return (
+        <div ref={(p) => {
+            if (p) {
+                let bd = p.ownerDocument.scrollingElement;
+                let { left, top } = p.getBoundingClientRect()
+                if (bd) {
+                    gx.current = left + bd.scrollLeft;
+                    gy.current = top + bd.scrollTop;
+                }
+            }
+        }}>
+            <Box onMouseUp={onUp} onMouseDown={onDown} width={width} height={height} style={{ transform: `translate(${x}px,${y}px)` }} sx={{ bgcolor: "red", position: 'relative', }} />
+        </div>
+    );
+}
+
 const col = 100;
 
 export default function Schedule(props: Props) {
@@ -92,92 +141,43 @@ export default function Schedule(props: Props) {
     const startDate = toDate(addDay(currentDate, -currentDate.getDay()));
     const classes = useStyles();
 
-    const MakeBox = () => {
-        const [x, setX] = useState(0);
-        const [y, setY] = useState(0);
-        const isDrg = useRef(false);
-        const isFirst = useRef(true);
-        const gx = useRef(0);
-        const gy = useRef(0);
-        const ox = useRef(0);
-        const oy = useRef(0);
-        const sx = useRef(0);
-        const sy = useRef(0);
-        const onMove = (e: any) => {
-            if (!isDrg.current) return;
-            // Ad hoc !!
-            let bd = e.target.ownerDocument.scrollingElement;
-            let h = sy.current - bd.scrollTop;
-            let w = sx.current - bd.scrollLeft;
-            setX(e.clientX - w - gx.current - ox.current);
-            setY(e.clientY - h - gy.current - oy.current);
-        }
-        const onUp = (e: any) => {
-            ox.current = 0;
-            oy.current = 0;
-            isDrg.current = false;
-            let el = e.target.ownerDocument;
-            el.removeEventListener('mousemove', onMove, { capture: true });
-            el.removeEventListener('mouseup', onUp, { capture: true });
-        }
-        const onDown = (e: any) => {
-            if (isFirst.current) {
-                let bd = e.target.ownerDocument.scrollingElement;
-                let { left, top } = e.target.getBoundingClientRect()
-                gx.current = left;
-                gy.current = top;
-                sy.current = bd.scrollTop;
-                sx.current = bd.scrollLeft;
-                isFirst.current = false;
-            }
-            ox.current = e.nativeEvent.offsetX;
-            oy.current = e.nativeEvent.offsetY;
-            isDrg.current = true;
-            let el = e.target.ownerDocument;
-            el.addEventListener('mouseup', onUp, { capture: true });
-            el.addEventListener('mousemove', onMove, { capture: true });
-        }
-        return (
-            <Box onMouseUp={onUp} onMouseDown={onDown} width={col} height={50} style={{ transform: `translate(${x}px,${y}px)` }} sx={{ bgcolor: "red", }} />
-        );
-    };
-
     return (
-        <Paper>
-            <Table>
-                <TableHead>
-                    <TableRow>
-                        <TableCell width={col}>Dessert</TableCell>
-                        <TableCell width={col}>Calories</TableCell>
-                        <TableCell width={col}>Fat&nbsp;(g)</TableCell>
-                        <TableCell width={col}>Carbs&nbsp;(g)</TableCell>
-                        <TableCell width={col}>Protein&nbsp;(g)</TableCell>
-                        <TableCell width={col}>Carbs&nbsp;(g)</TableCell>
-                        <TableCell width={col}>Protein&nbsp;(g)</TableCell>
-                    </TableRow>
-                </TableHead>
-                <TableBody>
-                    {seq(48).map((i) => {
-                        return (
-                            <TableRow >
-                                <TableCell width={col} />
-                                <TableCell width={col} />
-                                <TableCell width={col} />
-                                <TableCell width={col} />
-                                <TableCell width={col} />
-                                <TableCell width={col} />
-                                <TableCell width={col} />
-                            </TableRow>
-                        );
-                    })}
-                </TableBody>
-            </Table>
+        <>
+            <Paper>
+                <Table >
+                    <TableHead>
+                        <TableRow>
+                            <TableCell style={{ borderLeft: '1px solid red' }} width={col}>Dessert</TableCell>
+                            <TableCell style={{ borderLeft: '1px solid red' }} width={col}>Calories</TableCell>
+                            <TableCell style={{ borderLeft: '1px solid red' }} width={col}>Fat&nbsp;(g)</TableCell>
+                            <TableCell style={{ borderLeft: '1px solid red' }} width={col}>Carbs&nbsp;(g)</TableCell>
+                            <TableCell style={{ borderLeft: '1px solid red' }} width={col}>Protein&nbsp;(g)</TableCell>
+                            <TableCell style={{ borderLeft: '1px solid red' }} width={col}>Carbs&nbsp;(g)</TableCell>
+                            <TableCell style={{ borderLeft: '1px solid red' }} width={col}>Protein&nbsp;(g)</TableCell>
+                        </TableRow>
+                    </TableHead>
+                    <TableBody>
+                        {seq(48).map((i) => {
+                            return (
+                                <TableRow >
+                                    <TableCell style={{ borderLeft: '1px solid red' }} width={col} />
+                                    <TableCell style={{ borderLeft: '1px solid red' }} width={col} />
+                                    <TableCell style={{ borderLeft: '1px solid red' }} width={col} />
+                                    <TableCell style={{ borderLeft: '1px solid red' }} width={col} />
+                                    <TableCell style={{ borderLeft: '1px solid red' }} width={col} />
+                                    <TableCell style={{ borderLeft: '1px solid red' }} width={col} />
+                                    <TableCell style={{ borderLeft: '1px solid red' }} width={col} />
+                                </TableRow>
+                            );
+                        })}
+                    </TableBody>
+                </Table>
+            </Paper >
             <div>
-                <MakeBox />
-                <Draggable>
-                    <div>I can now be moved around!</div>
-                </Draggable>
+                <DragBox />
+                <DragBox />
+                <DragBox />
             </div>
-        </Paper >
+        </>
     );
 }
