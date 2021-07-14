@@ -160,6 +160,11 @@ const MultiBox = ({ boxes, onCrash = (x) => { return new Promise(() => { return;
     );
 }
 
+const date2index = (d: Date) => {
+    let t = d.getTime() - toDate(d).getTime();
+    return t / (30 * 60 * 1000);
+}
+
 export default function Schedule(props: Props) {
     const [data, setData] = useState<Shift[]>([]);
     const [currentDate, setDate] = useState(new Date());
@@ -194,9 +199,52 @@ export default function Schedule(props: Props) {
         (async () => {
             let schs = await getSchedules();
             if (schs) setData(schs);
-            console.log(schs);
         })();
     }, []);
+    const schs2boxes = (schs: Shift[]) => {
+        return schs.map((s) => {
+            const st = date2index(s.start_time);
+            const end = date2index(s.end_time);
+            const a = anchors.current;
+            if (s.start_time.getDay() !== s.end_time.getDay()) {
+                const sx = s.start_time.getDay() - startDate.getDay();
+                const ex = s.end_time.getDay() - startDate.getDay();
+                let dst = [];
+                if (sx < 7 && 0 <= sx) {
+                    const l = a[Math.floor(st)][sx][0] + (a[Math.floor(st) + 1][sx][0] - a[Math.floor(st)][sx][0]) * (st - Math.floor(st));
+                    const t = a[Math.floor(st)][sx][1] + (a[Math.floor(st) + 1][sx][1] - a[Math.floor(st)][sx][1]) * (st - Math.floor(st));
+                    const b = a[47][sx][1] + rh;
+                    dst.push([l, t, cw, b - t]);
+                }
+                let i;
+                for (i = sx + 1; i < ex; i++) {
+                    if (i < 7 && 0 <= i) {
+                        const l = a[0][i][0];
+                        const t = a[0][i][1];
+                        const b = a[47][i][1] + rh;
+                        dst.push([l, t, cw, b - t]);
+                    }
+                }
+                if (ex < 7 && 0 <= ex) {
+                    const l = a[0][ex][0];
+                    const t = a[0][ex][1];
+                    const b = a[Math.floor(end)][ex][1] + (a[Math.floor(end) + 1][ex][1] - a[Math.floor(end)][ex][1]) * (end - Math.floor(end));
+                    dst.push([l, t, cw, b - t]);
+                }
+                return dst;
+            } else {
+                const x = s.start_time.getDay() - startDate.getDay();
+                if (x < 7 && 0 <= x) {
+                    const l = a[Math.floor(st)][x][0] + (a[Math.floor(st) + 1][x][0] - a[Math.floor(st)][x][0]) * (st - Math.floor(st));
+                    const t = a[Math.floor(st)][x][1] + (a[Math.floor(st) + 1][x][1] - a[Math.floor(st)][x][1]) * (st - Math.floor(st));
+                    const b = a[Math.floor(end)][x][1] + (a[Math.floor(end) + 1][x][1] - a[Math.floor(end)][x][1]) * (end - Math.floor(end));
+                    return [[l, t, cw, b - t]];
+                } else {
+                    return [];
+                }
+            }
+        }).filter((x) => x !== []) as [number, number, number, number][][];
+    }
 
     return (
         <>
@@ -231,8 +279,7 @@ export default function Schedule(props: Props) {
                 </Table>
             </Paper >
             <div>
-                <MultiBox boxes={[[300, 300, cw, rh], [500, 500, cw, rh]]} />
-                <DragBox width={cw} initX={x} initY={y} />
+                {schs2boxes(data).map((bs) => <MultiBox boxes={bs} />)}
             </div>
         </>
     );
