@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import Paper from '@material-ui/core/Paper';
 import AppBar from '@material-ui/core/AppBar';
 import CssBaseline from '@material-ui/core/CssBaseline';
@@ -25,7 +25,7 @@ import { BrowserRouter, Route, Switch, Redirect, Link } from "react-router-dom";
 import Box from '@material-ui/core/Box';
 import { sizing, palette, positions } from '@material-ui/system';
 import { seq } from './Utils';
-import Draggable from 'react-draggable'; // The default
+import { useResizeDetector } from 'react-resize-detector';
 
 const drawerWidth = 240;
 
@@ -90,32 +90,35 @@ const DragBox = ({ procXY = (x) => x, onDown = (x) => { return new Promise(() =>
     const isDrg = useRef(false);
     const ox = useRef(0);
     const oy = useRef(0);
-    const onMove = (e: any) => {
+    useEffect(() => {
+        setX(initX);
+        setY(initY);
+    }, [initX, initY]);
+    const onMove = useCallback((e: any) => {
         if (!isDrg.current) return;
         // Ad hoc !!
         let bd = e.target.ownerDocument.scrollingElement;
         const [px, py] = procXY([e.clientX + bd.scrollLeft - ox.current, e.clientY + bd.scrollTop - oy.current]);
         setX(px);
         setY(py);
-        // console.log(e.clientX + bd.scrollLeft - ox.current, e.clientY + bd.scrollTop - oy.current);
-    }
-    const onUp = (e: any) => {
+    }, [procXY, setX, setY]);
+    const onUp = useCallback((e: any) => {
         ox.current = 0;
         oy.current = 0;
         isDrg.current = false;
         let el = e.target.ownerDocument;
         el.removeEventListener('mousemove', onMove, { capture: true });
         el.removeEventListener('mouseup', onUp, { capture: true });
-    }
-    const _onDown = (e: any) => {
+    }, [onMove]);
+    const _onDown = useCallback(async (e: any) => {
         ox.current = e.nativeEvent.offsetX;
         oy.current = e.nativeEvent.offsetY;
         isDrg.current = true;
         let el = e.target.ownerDocument;
         el.addEventListener('mouseup', onUp, { capture: true });
         el.addEventListener('mousemove', onMove, { capture: true });
-        onDown([x, y]);
-    }
+        await onDown([x, y]);
+    }, [onDown, onUp, onMove, x, y]);
     return (
         <Box onMouseUp={onUp} onMouseDown={_onDown} width={width} height={height} sx={{ bgcolor: "red", position: 'absolute', left: x, top: y, }} />
     );
@@ -130,7 +133,11 @@ export default function Schedule(props: Props) {
     const classes = useStyles();
     const cells = useRef<any[][]>(seq(48).map((_) => seq(7).map((_) => undefined)));
     const anchors = useRef<number[][][]>(seq(48).map((_) => seq(7).map((_) => [-1, -1])));
-    useLayoutEffect(() => {
+    const [cw, setCw] = useState(100); // column width
+    const [rh, setRh] = useState(50); // row height
+    const [x, setX] = useState(0);
+    const [y, setY] = useState(0);
+    const onResize = useCallback(() => {
         cells.current.forEach((v, i, _) =>
             v.forEach((r, j, _) => {
                 if (r) {
@@ -141,39 +148,41 @@ export default function Schedule(props: Props) {
                     }
                 }
             }));
-        console.log(anchors.current[0][0]);
-    }, [cells]);
-
-    useEffect(() => {
-        console.log(cells.current);
-    }, [cells]);
+        let rect = cells.current[0][0].getBoundingClientRect();
+        setX(anchors.current[0][1][0]);
+        setY(anchors.current[0][1][1]);
+        setCw(rect.width);
+        setRh(rect.height);
+    }, [setCw, setRh, setX, setY]);
+    const { ref } = useResizeDetector({ onResize });
+    useEffect(onResize, []);
 
     return (
         <>
-            <Paper>
+            <Paper ref={ref}>
                 <Table >
                     <TableHead>
                         <TableRow>
-                            <TableCell style={{ borderLeft: '1px solid' }} width={col}>Dessert</TableCell>
-                            <TableCell style={{ borderLeft: '1px solid' }} width={col}>Calories</TableCell>
-                            <TableCell style={{ borderLeft: '1px solid' }} width={col}>Fat&nbsp;(g)</TableCell>
-                            <TableCell style={{ borderLeft: '1px solid' }} width={col}>Carbs&nbsp;(g)</TableCell>
-                            <TableCell style={{ borderLeft: '1px solid' }} width={col}>Protein&nbsp;(g)</TableCell>
-                            <TableCell style={{ borderLeft: '1px solid' }} width={col}>Carbs&nbsp;(g)</TableCell>
-                            <TableCell style={{ borderLeft: '1px solid' }} width={col}>Protein&nbsp;(g)</TableCell>
+                            <TableCell style={{ borderLeft: '1px solid' }} width={cw}>Dessert</TableCell>
+                            <TableCell style={{ borderLeft: '1px solid' }} width={cw}>Calories</TableCell>
+                            <TableCell style={{ borderLeft: '1px solid' }} width={cw}>Fat&nbsp;(g)</TableCell>
+                            <TableCell style={{ borderLeft: '1px solid' }} width={cw}>Carbs&nbsp;(g)</TableCell>
+                            <TableCell style={{ borderLeft: '1px solid' }} width={cw}>Protein&nbsp;(g)</TableCell>
+                            <TableCell style={{ borderLeft: '1px solid' }} width={cw}>Carbs&nbsp;(g)</TableCell>
+                            <TableCell style={{ borderLeft: '1px solid' }} width={cw}>Protein&nbsp;(g)</TableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>
                         {seq(48).map((i) => {
                             return (
                                 <TableRow >
-                                    <TableCell ref={(r) => { cells.current[i][0] = r }} style={{ borderLeft: '1px solid' }} width={col} />
-                                    <TableCell ref={(r) => { cells.current[i][1] = r }} style={{ borderLeft: '1px solid' }} width={col} />
-                                    <TableCell ref={(r) => { cells.current[i][2] = r }} style={{ borderLeft: '1px solid' }} width={col} />
-                                    <TableCell ref={(r) => { cells.current[i][3] = r }} style={{ borderLeft: '1px solid' }} width={col} />
-                                    <TableCell ref={(r) => { cells.current[i][4] = r }} style={{ borderLeft: '1px solid' }} width={col} />
-                                    <TableCell ref={(r) => { cells.current[i][5] = r }} style={{ borderLeft: '1px solid' }} width={col} />
-                                    <TableCell ref={(r) => { cells.current[i][6] = r }} style={{ borderLeft: '1px solid' }} width={col} />
+                                    <TableCell ref={(r) => { cells.current[i][0] = r }} style={{ borderLeft: '1px solid' }} width={cw} />
+                                    <TableCell ref={(r) => { cells.current[i][1] = r }} style={{ borderLeft: '1px solid' }} width={cw} />
+                                    <TableCell ref={(r) => { cells.current[i][2] = r }} style={{ borderLeft: '1px solid' }} width={cw} />
+                                    <TableCell ref={(r) => { cells.current[i][3] = r }} style={{ borderLeft: '1px solid' }} width={cw} />
+                                    <TableCell ref={(r) => { cells.current[i][4] = r }} style={{ borderLeft: '1px solid' }} width={cw} />
+                                    <TableCell ref={(r) => { cells.current[i][5] = r }} style={{ borderLeft: '1px solid' }} width={cw} />
+                                    <TableCell ref={(r) => { cells.current[i][6] = r }} style={{ borderLeft: '1px solid' }} width={cw} />
                                 </TableRow>
                             );
                         })}
@@ -181,9 +190,9 @@ export default function Schedule(props: Props) {
                 </Table>
             </Paper >
             <div>
-                <DragBox />
-                <DragBox />
-                <DragBox />
+                <DragBox width={cw} initX={x} initY={y} />
+                <DragBox width={cw} />
+                <DragBox width={cw} />
             </div>
         </>
     );
