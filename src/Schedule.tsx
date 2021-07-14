@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import Paper from '@material-ui/core/Paper';
 import AppBar from '@material-ui/core/AppBar';
 import CssBaseline from '@material-ui/core/CssBaseline';
@@ -84,12 +84,10 @@ const toDate = (d: Date) => {
     return t;
 }
 
-const DragBox = ({ procXY = (x) => x, width = 100, height = 50 }: { procXY?: (_: [number, number]) => [number, number], width?: number, height?: number }) => {
-    const [x, setX] = useState(0);
-    const [y, setY] = useState(0);
+const DragBox = ({ procXY = (x) => x, onDown = (x) => { return new Promise(() => { return; }); }, width = 100, height = 50, initX = 300, initY = 100 }: { procXY?: (_: [number, number]) => [number, number], onDown?: (_: [number, number]) => Promise<void>, width?: number, height?: number, initX?: number, initY?: number }) => {
+    const [x, setX] = useState(initX);
+    const [y, setY] = useState(initY);
     const isDrg = useRef(false);
-    const gx = useRef(0);
-    const gy = useRef(0);
     const ox = useRef(0);
     const oy = useRef(0);
     const onMove = (e: any) => {
@@ -97,8 +95,8 @@ const DragBox = ({ procXY = (x) => x, width = 100, height = 50 }: { procXY?: (_:
         // Ad hoc !!
         let bd = e.target.ownerDocument.scrollingElement;
         const [px, py] = procXY([e.clientX + bd.scrollLeft - ox.current, e.clientY + bd.scrollTop - oy.current]);
-        setX(px - gx.current);
-        setY(py - gy.current);
+        setX(px);
+        setY(py);
         // console.log(e.clientX + bd.scrollLeft - ox.current, e.clientY + bd.scrollTop - oy.current);
     }
     const onUp = (e: any) => {
@@ -109,27 +107,17 @@ const DragBox = ({ procXY = (x) => x, width = 100, height = 50 }: { procXY?: (_:
         el.removeEventListener('mousemove', onMove, { capture: true });
         el.removeEventListener('mouseup', onUp, { capture: true });
     }
-    const onDown = (e: any) => {
+    const _onDown = (e: any) => {
         ox.current = e.nativeEvent.offsetX;
         oy.current = e.nativeEvent.offsetY;
         isDrg.current = true;
         let el = e.target.ownerDocument;
         el.addEventListener('mouseup', onUp, { capture: true });
         el.addEventListener('mousemove', onMove, { capture: true });
+        onDown([x, y]);
     }
     return (
-        <div ref={(p) => {
-            if (p) {
-                let bd = p.ownerDocument.scrollingElement;
-                let { left, top } = p.getBoundingClientRect()
-                if (bd) {
-                    gx.current = left + bd.scrollLeft;
-                    gy.current = top + bd.scrollTop;
-                }
-            }
-        }}>
-            <Box onMouseUp={onUp} onMouseDown={onDown} width={width} height={height} style={{ transform: `translate(${x}px,${y}px)` }} sx={{ bgcolor: "red", position: 'relative', }} />
-        </div>
+        <Box onMouseUp={onUp} onMouseDown={_onDown} width={width} height={height} sx={{ bgcolor: "red", position: 'absolute', left: x, top: y, }} />
     );
 }
 
@@ -140,6 +128,25 @@ export default function Schedule(props: Props) {
     const [currentDate, setDate] = useState(new Date());
     const startDate = toDate(addDay(currentDate, -currentDate.getDay()));
     const classes = useStyles();
+    const cells = useRef<any[][]>(seq(48).map((_) => seq(7).map((_) => undefined)));
+    const anchors = useRef<number[][][]>(seq(48).map((_) => seq(7).map((_) => [-1, -1])));
+    useLayoutEffect(() => {
+        cells.current.forEach((v, i, _) =>
+            v.forEach((r, j, _) => {
+                if (r) {
+                    let bd = r.ownerDocument.scrollingElement;
+                    let { left, top } = r.getBoundingClientRect()
+                    if (bd) {
+                        anchors.current[i][j] = [left + bd.scrollLeft, top + bd.scrollTop];
+                    }
+                }
+            }));
+        console.log(anchors.current[0][0]);
+    }, [cells]);
+
+    useEffect(() => {
+        console.log(cells.current);
+    }, [cells]);
 
     return (
         <>
@@ -147,26 +154,26 @@ export default function Schedule(props: Props) {
                 <Table >
                     <TableHead>
                         <TableRow>
-                            <TableCell style={{ borderLeft: '1px solid red' }} width={col}>Dessert</TableCell>
-                            <TableCell style={{ borderLeft: '1px solid red' }} width={col}>Calories</TableCell>
-                            <TableCell style={{ borderLeft: '1px solid red' }} width={col}>Fat&nbsp;(g)</TableCell>
-                            <TableCell style={{ borderLeft: '1px solid red' }} width={col}>Carbs&nbsp;(g)</TableCell>
-                            <TableCell style={{ borderLeft: '1px solid red' }} width={col}>Protein&nbsp;(g)</TableCell>
-                            <TableCell style={{ borderLeft: '1px solid red' }} width={col}>Carbs&nbsp;(g)</TableCell>
-                            <TableCell style={{ borderLeft: '1px solid red' }} width={col}>Protein&nbsp;(g)</TableCell>
+                            <TableCell style={{ borderLeft: '1px solid' }} width={col}>Dessert</TableCell>
+                            <TableCell style={{ borderLeft: '1px solid' }} width={col}>Calories</TableCell>
+                            <TableCell style={{ borderLeft: '1px solid' }} width={col}>Fat&nbsp;(g)</TableCell>
+                            <TableCell style={{ borderLeft: '1px solid' }} width={col}>Carbs&nbsp;(g)</TableCell>
+                            <TableCell style={{ borderLeft: '1px solid' }} width={col}>Protein&nbsp;(g)</TableCell>
+                            <TableCell style={{ borderLeft: '1px solid' }} width={col}>Carbs&nbsp;(g)</TableCell>
+                            <TableCell style={{ borderLeft: '1px solid' }} width={col}>Protein&nbsp;(g)</TableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>
                         {seq(48).map((i) => {
                             return (
                                 <TableRow >
-                                    <TableCell style={{ borderLeft: '1px solid red' }} width={col} />
-                                    <TableCell style={{ borderLeft: '1px solid red' }} width={col} />
-                                    <TableCell style={{ borderLeft: '1px solid red' }} width={col} />
-                                    <TableCell style={{ borderLeft: '1px solid red' }} width={col} />
-                                    <TableCell style={{ borderLeft: '1px solid red' }} width={col} />
-                                    <TableCell style={{ borderLeft: '1px solid red' }} width={col} />
-                                    <TableCell style={{ borderLeft: '1px solid red' }} width={col} />
+                                    <TableCell ref={(r) => { cells.current[i][0] = r }} style={{ borderLeft: '1px solid' }} width={col} />
+                                    <TableCell ref={(r) => { cells.current[i][1] = r }} style={{ borderLeft: '1px solid' }} width={col} />
+                                    <TableCell ref={(r) => { cells.current[i][2] = r }} style={{ borderLeft: '1px solid' }} width={col} />
+                                    <TableCell ref={(r) => { cells.current[i][3] = r }} style={{ borderLeft: '1px solid' }} width={col} />
+                                    <TableCell ref={(r) => { cells.current[i][4] = r }} style={{ borderLeft: '1px solid' }} width={col} />
+                                    <TableCell ref={(r) => { cells.current[i][5] = r }} style={{ borderLeft: '1px solid' }} width={col} />
+                                    <TableCell ref={(r) => { cells.current[i][6] = r }} style={{ borderLeft: '1px solid' }} width={col} />
                                 </TableRow>
                             );
                         })}
