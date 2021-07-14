@@ -80,9 +80,10 @@ pub struct UserToken {
     pub exp: i64,
     // data
     pub user: String,
+    pub isadmin: bool,
 }
 
-pub fn generate_token(username: &str) -> Option<String> {
+pub fn generate_token(username: &str, isadmin: &bool) -> Option<String> {
     let _ = dotenv().ok()?;
     let key = env::var("JWT_SECRET").expect("JWT_SECRET must be set");
     let exp = env::var("JWT_EXPIRES_IN")
@@ -94,6 +95,7 @@ pub fn generate_token(username: &str) -> Option<String> {
         iat: now,
         exp: now + exp,
         user: username.to_string(),
+        isadmin: isadmin.clone(),
     };
 
     jsonwebtoken::encode(
@@ -120,7 +122,7 @@ pub fn validate_user(conn: &PgConnection, username: &str, password: &str) -> Opt
 }
 
 pub fn login(conn: &PgConnection, username: &str, password: &str) -> Option<String> {
-    validate_user(conn, username, password).and_then(|x| generate_token(&x.id))
+    validate_user(conn, username, password).and_then(|x| generate_token(&x.id, &x.isadmin))
 }
 
 pub fn decode(h: &str) -> Option<TokenData<UserToken>> {

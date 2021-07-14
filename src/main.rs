@@ -1,8 +1,9 @@
 use actix_files::{Files, NamedFile};
 use actix_web::HttpResponse;
-use actix_web::{dev::HttpResponseBuilder, http::header, http::StatusCode};
+use actix_web::{dev::HttpResponseBuilder, http, http::header, http::StatusCode};
 use actix_web::{error, web, App, HttpRequest, HttpServer, Responder, Result};
 use derive_more::{Display, Error};
+use diesel::RunQueryDsl;
 use diesel::{
     pg::PgConnection,
     r2d2::{self, ConnectionManager},
@@ -26,6 +27,12 @@ pub struct UserPass {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StartEnd {
     pub username: String,
+    pub start_time: chrono::NaiveDateTime,
+    pub end_time: chrono::NaiveDateTime,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct StartEndWithoutId {
     pub start_time: chrono::NaiveDateTime,
     pub end_time: chrono::NaiveDateTime,
 }
@@ -88,27 +95,64 @@ async fn get_schedules(
     use diesel::ExpressionMethods;
     use diesel::QueryDsl;
     use diesel::RunQueryDsl;
-    use schema::schedules;
     use qstring::QString;
+    use schema::schedules;
     let qs = QString::from(req.query_string());
-    let offset = qs.get("offset").unwrap_or_else(|| "0").parse::<i64>()
+    let offset = qs
+        .get("offset")
+        .unwrap_or_else(|| "0")
+        .parse::<i64>()
         .map_err(|x| error::ErrorBadRequest(format!("cannot parse offset: {}", x)))?;
-    let limit = qs.get("limit").unwrap_or_else(|| "1000").parse::<i64>()
+    let limit = qs
+        .get("limit")
+        .unwrap_or_else(|| "1000")
+        .parse::<i64>()
         .map_err(|x| error::ErrorBadRequest(format!("cannot parse limit: {}", x)))?;
 
-    let user = auth_without_name(&req).ok_or(error::ErrorUnauthorized("unauthorized error"))?;
+    let _ = auth_without_name(&req).ok_or(error::ErrorUnauthorized("unauthorized error"))?;
     conn.get()
         .ok()
         .ok_or(error::Error::from(MyError::InternalError))
         .and_then(|conn| {
             schedules::table
-                .filter(schedules::username.eq(user))
+                // .filter(schedules::username.eq(user))
                 .order(schedules::start_time.desc())
                 .offset(offset)
                 .limit(limit)
                 .get_results::<Schedule>(&conn)
                 .map_err(|x| error::Error::from(MyError::QueryError(x)))
                 .map(|x| HttpResponse::Ok().json(x))
+        })
+}
+
+async fn update_schedule(
+    req: HttpRequest,
+    web::Path(id): web::Path<i64>,
+    se: web::Json<StartEndWithoutId>,
+    conn: web::Data<r2d2::Pool<ConnectionManager<PgConnection>>>,
+) -> Result<HttpResponse, error::Error> {
+    use diesel::ExpressionMethods;
+    use diesel::QueryDsl;
+    use schema::schedules;
+
+    let user = auth_without_name(&req).ok_or(error::ErrorUnauthorized("unauthorized error"))?;
+    conn.get()
+        .ok()
+        .ok_or(error::Error::from(MyError::InternalError))
+        .and_then(|conn| {
+            diesel::update(
+                schedules::table
+                    .filter(schedules::username.eq(user))
+                    .filter(schedules::id.eq(id))
+                    .filter(schedules::permitted.eq(false)),
+            )
+            .set((
+                schedules::start_time.eq(se.start_time),
+                schedules::end_time.eq(se.end_time),
+            ))
+            .execute(&conn)
+            .map_err(|x| error::Error::from(MyError::QueryError(x)))
+            .map(|x| HttpResponse::Ok().json(x))
         })
 }
 
@@ -138,12 +182,13 @@ async fn main() -> std::io::Result<()> {
     let pool = establish_connection().unwrap();
     HttpServer::new(move || {
         App::new()
-            .data(pool.clone())
             .route("/api/login", web::post().to(login_api))
+            .service(web::resource("/api/schedules/{id}").route(web::post().to(update_schedule)))
             .route("/api/schedules", web::post().to(add_schedule))
             .route("/api/schedules", web::get().to(get_schedules))
             .route("/", web::get().to(index))
             .service(Files::new("/", "./build").prefer_utf8(true))
+            .data(pool.clone())
     })
     .bind(("0.0.0.0", port))?
     .run()

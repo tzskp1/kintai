@@ -80,24 +80,24 @@ const toDate = (d: Date) => {
 }
 
 type DragBoxProp = {
-    procXY?: (_: [number, number]) => [number, number],
-    onDown?: (_: [number, number]) => Promise<void>,
-    onUp?: (_: [number, number]) => Promise<void>,
-    width?: number,
-    height?: number,
-    initX?: number,
-    initY?: number
+    procXY: (_: [[number, number], [number, number]]) => [number, number],
+    onDown: (_: [number, number]) => Promise<void>,
+    onUp: (_: [number, number]) => Promise<void>,
+    width: number,
+    height: number,
+    initX: number,
+    initY: number
 }
 
 type MultiBoxProp = {
     onCrash?: (_: number) => Promise<void>,
-    procXY?: (_: [number, number]) => [number, number],
+    procXY: (_: [[number, number], [number, number]]) => [number, number],
     onDown?: (_: [number, number]) => Promise<void>,
     onUp?: (_: [number, number]) => Promise<void>,
     boxes: [number, number, number, number][]
 }
 
-const DragBox = ({ procXY = (x) => x, onUp = (x) => { return new Promise(() => { return; }); }, onDown = (x) => { return new Promise(() => { return; }); }, width = 100, height = 50, initX = 300, initY = 100 }: DragBoxProp) => {
+const DragBox = ({ procXY, onUp, onDown, width, height, initX, initY }: DragBoxProp) => {
     const [x, setX] = useState(initX);
     const [y, setY] = useState(initY);
     const isDrg = useRef(false);
@@ -111,7 +111,7 @@ const DragBox = ({ procXY = (x) => x, onUp = (x) => { return new Promise(() => {
         if (!isDrg.current) return;
         // Ad hoc !!
         let bd = e.target.ownerDocument.scrollingElement;
-        const [px, py] = procXY([e.clientX + bd.scrollLeft - ox.current, e.clientY + bd.scrollTop - oy.current]);
+        const [px, py] = procXY([[e.clientX + bd.scrollLeft - ox.current, ox.current], [e.clientY + bd.scrollTop - oy.current, oy.current]]);
         setX(px);
         setY(py);
     }, [procXY, setX, setY]);
@@ -138,16 +138,12 @@ const DragBox = ({ procXY = (x) => x, onUp = (x) => { return new Promise(() => {
     );
 }
 
-const MultiBox = ({ boxes, onCrash = (x) => { return new Promise(() => { return; }); }, procXY = (x) => x, onUp = (x) => { return new Promise(() => { return; }); }, onDown = (x) => { return new Promise(() => { return; }); } }: MultiBoxProp) => {
-    const [bxs, setBxs] = useState(boxes);
+const MultiBox = ({ boxes, onCrash = (x) => { return new Promise(() => { return; }); }, procXY, onUp = (x) => { return new Promise(() => { return; }); }, onDown = (x) => { return new Promise(() => { return; }); } }: MultiBoxProp) => {
     const [num, setNum] = useState(-1);
-    useEffect(() => {
-        setNum(-1);
-        setBxs(boxes);
-    }, [boxes]);
+    useEffect(() => setNum(-1), [boxes]);
     return (
         <div>
-            {bxs.map((b, i, _) => {
+            {boxes.map((b, i, _) => {
                 const [x, y, w, h] = b;
                 const _onDown = async (xy: [number, number]) => {
                     setNum(i);
@@ -211,8 +207,8 @@ export default function Schedule(props: Props) {
                 const ex = s.end_time.getDay() - startDate.getDay();
                 let dst = [];
                 if (sx < 7 && 0 <= sx) {
-                    const l = a[Math.floor(st)][sx][0] + (a[Math.floor(st) + 1][sx][0] - a[Math.floor(st)][sx][0]) * (st - Math.floor(st));
-                    const t = a[Math.floor(st)][sx][1] + (a[Math.floor(st) + 1][sx][1] - a[Math.floor(st)][sx][1]) * (st - Math.floor(st));
+                    const l = sx * cw + a[0][0][0];
+                    const t = st * rh + a[0][0][1];
                     const b = a[47][sx][1] + rh;
                     dst.push([l, t, cw, b - t]);
                 }
@@ -228,16 +224,16 @@ export default function Schedule(props: Props) {
                 if (ex < 7 && 0 <= ex) {
                     const l = a[0][ex][0];
                     const t = a[0][ex][1];
-                    const b = a[Math.floor(end)][ex][1] + (a[Math.floor(end) + 1][ex][1] - a[Math.floor(end)][ex][1]) * (end - Math.floor(end));
+                    const b = end * rh + a[0][0][1];
                     dst.push([l, t, cw, b - t]);
                 }
                 return dst;
             } else {
                 const x = s.start_time.getDay() - startDate.getDay();
                 if (x < 7 && 0 <= x) {
-                    const l = a[Math.floor(st)][x][0] + (a[Math.floor(st) + 1][x][0] - a[Math.floor(st)][x][0]) * (st - Math.floor(st));
-                    const t = a[Math.floor(st)][x][1] + (a[Math.floor(st) + 1][x][1] - a[Math.floor(st)][x][1]) * (st - Math.floor(st));
-                    const b = a[Math.floor(end)][x][1] + (a[Math.floor(end) + 1][x][1] - a[Math.floor(end)][x][1]) * (end - Math.floor(end));
+                    const l = x * cw + a[0][0][0];
+                    const t = st * rh + a[0][0][1];
+                    const b = end * rh + a[0][0][1];
                     return [[l, t, cw, b - t]];
                 } else {
                     return [];
@@ -245,6 +241,14 @@ export default function Schedule(props: Props) {
             }
         }).filter((x) => x !== []) as [number, number, number, number][][];
     }
+
+    const procXY = useCallback(([[x, ox], [y, oy]]: [[number, number], [number, number]]) => {
+        const a = anchors.current;
+        const i = Math.min(6, Math.max(0, Math.floor((x + ox - a[0][0][0]) / cw)));
+        const nx = i * cw + a[0][0][0];
+        const ny = Math.min(a[47][i][1] + rh, Math.max(a[0][i][1], y));
+        return [nx, ny] as [number, number];
+    }, [cw]);
 
     return (
         <>
@@ -279,7 +283,7 @@ export default function Schedule(props: Props) {
                 </Table>
             </Paper >
             <div>
-                {schs2boxes(data).map((bs) => <MultiBox boxes={bs} />)}
+                {schs2boxes(data).map((bs) => <MultiBox boxes={bs} procXY={procXY} />)}
             </div>
         </>
     );
