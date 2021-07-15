@@ -211,12 +211,12 @@ export default function Schedule(props: Props) {
             ox.current = e.nativeEvent.offsetX;
             oy.current = e.nativeEvent.offsetY;
             sel.current = i;
+            isRsz.current = false;
             isDrg.current = true;
             const bxs = sch2boxes(sft);
             if (i === bxs.length - 1) {
                 const [x, y, w, h] = bxs[i];
-                const dy = e.clientY - (y + h);
-                if (dy < drgSense && Math.abs(e.clientX - (x + w)) < cw) {
+                if (Math.abs(e.clientY - (y + h)) < drgSense && Math.abs(e.clientX - (x + w)) < cw) {
                     isDrg.current = false;
                     isRsz.current = true;
                 }
