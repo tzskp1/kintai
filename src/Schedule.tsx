@@ -24,7 +24,7 @@ import { makeStyles, useTheme, Theme, createStyles } from '@material-ui/core/sty
 import { BrowserRouter, Route, Switch, Redirect, Link } from "react-router-dom";
 import Box from '@material-ui/core/Box';
 import { sizing, palette, positions } from '@material-ui/system';
-import { getSchedules, seq, Shift } from './Utils';
+import { getSchedules, seq, Shift, day, updateSchedule } from './Utils';
 import { useResizeDetector } from 'react-resize-detector';
 
 const drawerWidth = 240;
@@ -46,10 +46,6 @@ const useStyles = makeStyles((theme: Theme) =>
     }),
 );
 
-// .row-overlay-hover:hover .overlay-content {
-//     visibility: visible;
-// }
-
 interface Props {
     /**
      * Injected by the documentation to work in an iframe.
@@ -57,14 +53,6 @@ interface Props {
      */
     window?: () => Window;
 }
-
-const appointments = [
-    {
-        startDate: new Date(2021, 7, 13, 9, 35),
-        endDate: new Date(2021, 7, 14, 11, 30),
-        id: 0,
-    }
-];
 
 const addDay = (d: Date, days: number) => {
     return new Date(d.getFullYear(), d.getMonth(), d.getDate() + days, d.getHours(), d.getMinutes(), d.getSeconds(), d.getMilliseconds());
@@ -79,64 +67,10 @@ const toDate = (d: Date) => {
     return t;
 }
 
-type DragBoxProp = {
-    procXY: (_: [[number, number], [number, number]]) => [number, number],
-    onDown: (_: [number, number]) => Promise<void>,
-    onUp: (_: [number, number]) => Promise<void>,
-    width: number,
-    height: number,
-    initX: number,
-    initY: number
-}
-
 type MultiBoxProp = {
-    minHeight?: number,
-    maxHeight?: number,
-    procXY: (_: [[number, number], [number, number]]) => [number, number],
     onDown?: (_: Shift) => Promise<void>,
     onUp?: (_: Shift) => Promise<void>,
     shift: Shift
-}
-
-const DragBox = ({ procXY, onUp, onDown, width, height, initX, initY }: DragBoxProp) => {
-    const [x, setX] = useState(initX);
-    const [y, setY] = useState(initY);
-    const isDrg = useRef(false);
-    const ox = useRef(0);
-    const oy = useRef(0);
-    useEffect(() => {
-        setX(initX);
-        setY(initY);
-    }, [initX, initY]);
-    const onMove = useCallback((e: any) => {
-        if (!isDrg.current) return;
-        // Ad hoc !!
-        let bd = e.target.ownerDocument.scrollingElement;
-        const [px, py] = procXY([[e.clientX + bd.scrollLeft - ox.current, ox.current], [e.clientY + bd.scrollTop - oy.current, oy.current]]);
-        setX(px);
-        setY(py);
-    }, [procXY, setX, setY]);
-    const _onUp = useCallback(async (e: any) => {
-        ox.current = 0;
-        oy.current = 0;
-        isDrg.current = false;
-        let el = e.target.ownerDocument;
-        el.removeEventListener('mousemove', onMove, { capture: true });
-        el.removeEventListener('mouseup', _onUp, { capture: true });
-        await onUp([x, y]);
-    }, [onUp, onMove, x, y]);
-    const _onDown = useCallback(async (e: any) => {
-        ox.current = e.nativeEvent.offsetX;
-        oy.current = e.nativeEvent.offsetY;
-        isDrg.current = true;
-        let el = e.target.ownerDocument;
-        el.addEventListener('mouseup', _onUp, { capture: true });
-        el.addEventListener('mousemove', onMove, { capture: true });
-        await onDown([x, y]);
-    }, [onDown, _onUp, onMove, x, y]);
-    return (
-        <Box onMouseUp={_onUp} onMouseDown={_onDown} width={width} height={height} sx={{ bgcolor: "red", position: 'absolute', left: x, top: y, }} />
-    );
 }
 
 const date2index = (d: Date) => {
@@ -154,11 +88,10 @@ export default function Schedule(props: Props) {
     const startDate = toDate(addDay(currentDate, -currentDate.getDay()));
     const classes = useStyles();
     const cells = useRef<any[][]>(seq(48).map((_) => seq(7).map((_) => undefined)));
-    const anchors = useRef<number[][][]>(seq(48).map((_) => seq(7).map((_) => [-1, -1])));
+    const anchors = useRef<number[][][]>(seq(49).map((_) => seq(7).map((_) => [-1, -1])));
     const [cw, setCw] = useState(100); // column width
     const [rh, setRh] = useState(50); // row height
-    const [maxHeight, setMh] = useState(0);
-    const [minHeight, setMih] = useState(0);
+    const drgSense = 15;
     const onResize = useCallback(() => {
         cells.current.forEach((v, i, _) =>
             v.forEach((r, j, _) => {
@@ -171,11 +104,13 @@ export default function Schedule(props: Props) {
                 }
             }));
         let rect = cells.current[0][0].getBoundingClientRect();
-        setMh(anchors.current[47][0][1] + rh);
-        setMih(anchors.current[0][0][1]);
+        anchors.current[48].forEach((_u, i, _) => {
+            anchors.current[48][i][0] = anchors.current[47][i][0] + cw;
+            anchors.current[48][i][1] = anchors.current[47][i][1] + rh;
+        });
         setCw(rect.width);
         setRh(rect.height);
-    }, [setCw, setRh, setMh, rh, setMih]);
+    }, [setCw, setRh, rh, cw]);
     const { ref } = useResizeDetector({ onResize });
     useEffect(onResize, [onResize]);
     useEffect(() => {
@@ -189,12 +124,12 @@ export default function Schedule(props: Props) {
         const end = date2index(s.end_time);
         const a = anchors.current;
         if (s.start_time.getDay() !== s.end_time.getDay()) {
-            const sx = s.start_time.getDay() - startDate.getDay();
-            const ex = s.end_time.getDay() - startDate.getDay();
+            const sx = Math.floor((s.start_time.getTime() - startDate.getTime()) / day);
+            const ex = Math.floor((s.end_time.getTime() - startDate.getTime()) / day);
             let dst = [];
             if (sx < 7 && 0 <= sx) {
-                const l = sx * cw + a[0][0][0];
-                const t = st * rh + a[0][0][1];
+                const l = a[Math.floor(st)][sx][0] + (a[Math.floor(st) + 1][sx][0] - a[Math.floor(st)][sx][0]) * (st - Math.floor(st));
+                const t = a[Math.floor(st)][sx][1] + (a[Math.floor(st) + 1][sx][1] - a[Math.floor(st)][sx][1]) * (st - Math.floor(st));
                 const b = a[47][sx][1] + rh;
                 dst.push([l, t, cw, b - t]);
             }
@@ -210,16 +145,16 @@ export default function Schedule(props: Props) {
             if (ex < 7 && 0 <= ex) {
                 const l = a[0][ex][0];
                 const t = a[0][ex][1];
-                const b = end * rh + a[0][0][1];
+                const b = a[Math.floor(end)][ex][1] + (a[Math.floor(end) + 1][ex][1] - a[Math.floor(end)][ex][1]) * (end - Math.floor(end));
                 dst.push([l, t, cw, b - t]);
             }
             return dst as [number, number, number, number][];
         } else {
             const x = s.start_time.getDay() - startDate.getDay();
             if (x < 7 && 0 <= x) {
-                const l = x * cw + a[0][0][0];
-                const t = st * rh + a[0][0][1];
-                const b = end * rh + a[0][0][1];
+                const l = a[Math.floor(st)][x][0] + (a[Math.floor(st) + 1][x][0] - a[Math.floor(st)][x][0]) * (st - Math.floor(st));
+                const t = a[Math.floor(st)][x][1] + (a[Math.floor(st) + 1][x][1] - a[Math.floor(st)][x][1]) * (st - Math.floor(st));
+                const b = a[Math.floor(end)][x][1] + (a[Math.floor(end) + 1][x][1] - a[Math.floor(end)][x][1]) * (end - Math.floor(end));
                 return [[l, t, cw, b - t]];
             } else {
                 return [];
@@ -227,15 +162,24 @@ export default function Schedule(props: Props) {
         }
     }
 
-    const MultiBox = ({ maxHeight = 1000, minHeight = 1000, shift, procXY, onUp = (x) => { return new Promise(() => { return; }); }, onDown = (x) => { return new Promise(() => { return; }); } }: MultiBoxProp) => {
+    const procXY = useCallback(([[x, ox], [y, oy]]: [[number, number], [number, number]]) => {
+        const a = anchors.current;
+        const i = Math.min(6, Math.max(0, Math.floor((x + Math.min(ox, 0.5 * cw) - a[0][0][0]) / cw)));
+        const nx = i * cw + a[0][0][0];
+        return [nx, y] as [number, number];
+    }, [cw]);
+
+    const MultiBox = ({ shift, onUp = (x) => { return new Promise(() => { return; }); }, onDown = (x) => { return new Promise(() => { return; }); } }: MultiBoxProp) => {
         const [sft, setSft] = useState(shift);
         const sel = useRef(0);
         const isDrg = useRef(false);
+        const isRsz = useRef(false);
         const ox = useRef(0);
         const oy = useRef(0);
         useEffect(() => setSft(shift), [shift]);
         const onMove = async (e: any) => {
-            if (!isDrg.current) return;
+            console.log(isRsz.current);
+            if (!isDrg.current && !isRsz.current) return;
             let bd = e.target.ownerDocument.scrollingElement;
             const [px, py] = procXY([[e.clientX + bd.scrollLeft - ox.current, ox.current], [e.clientY + bd.scrollTop - oy.current, oy.current]]);
             const bxs = sch2boxes(sft);
@@ -244,16 +188,20 @@ export default function Schedule(props: Props) {
             let dx = (px - x) / cw;
             let dy = (py - y) / rh;
             dy = index2unixtime(dy);
-            const day = 24 * 60 * 60 * 1000;
-            const start_time = new Date(sft.start_time.getTime() + dy + dx * day);
-            const end_time = new Date(sft.end_time.getTime() + dy + dx * day);
-            console.log(dx);
-            setSft({ ...sft, start_time, end_time });
+            if (isDrg.current) {
+                const start_time = new Date(sft.start_time.getTime() + dy + dx * day);
+                const end_time = new Date(sft.end_time.getTime() + dy + dx * day);
+                setSft({ ...sft, start_time, end_time });
+            } else if (isRsz.current) {
+                const end_time = new Date(sft.end_time.getTime() + dy);
+                setSft({ ...sft, end_time });
+            }
         };
         const _onUp = async (e: any) => {
             ox.current = 0;
             oy.current = 0;
             isDrg.current = false;
+            isRsz.current = false;
             let el = e.target.ownerDocument;
             el.removeEventListener('mousemove', onMove, { capture: true });
             el.removeEventListener('mouseup', _onUp, { capture: true });
@@ -263,15 +211,23 @@ export default function Schedule(props: Props) {
             ox.current = e.nativeEvent.offsetX;
             oy.current = e.nativeEvent.offsetY;
             sel.current = i;
-            console.log(i);
             isDrg.current = true;
+            const bxs = sch2boxes(sft);
+            if (i === bxs.length - 1) {
+                const [x, y, w, h] = bxs[i];
+                const dy = e.clientY - (y + h);
+                if (dy < drgSense && Math.abs(e.clientX - (x + w)) < cw) {
+                    isDrg.current = false;
+                    isRsz.current = true;
+                }
+            }
             let el = e.target.ownerDocument;
             el.addEventListener('mouseup', _onUp, { capture: true });
             el.addEventListener('mousemove', onMove, { capture: true });
             await onDown(sft);
-        }
+        };
         return (
-            <div  >
+            <div>
                 {sch2boxes(sft).map((b, i, _) => {
                     const [x, y, w, h] = b;
                     return (<Box width={w} height={h} sx={{ bgcolor: "red", position: 'absolute', left: x, top: y, }} onMouseDown={_onDown(i)} onMouseUp={_onUp} />);
@@ -280,18 +236,10 @@ export default function Schedule(props: Props) {
         );
     }
 
-
-    const procXY = useCallback(([[x, ox], [y, oy]]: [[number, number], [number, number]]) => {
-        const a = anchors.current;
-        const i = Math.min(6, Math.max(0, Math.floor((x + Math.min(ox, 0.5 * cw) - a[0][0][0]) / cw)));
-        const nx = i * cw + a[0][0][0];
-        return [nx, y] as [number, number];
-    }, [cw, rh]);
-
     return (
         <>
             <Paper ref={ref}>
-                <Table >
+                <Table>
                     <TableHead>
                         <TableRow>
                             <TableCell style={{ borderLeft: '1px solid' }} width={cw}>{startDate.getDate()}</TableCell>
@@ -319,10 +267,8 @@ export default function Schedule(props: Props) {
                         })}
                     </TableBody>
                 </Table>
-            </Paper >
-            <div>
-                {data.map((s) => <MultiBox shift={s} procXY={procXY} maxHeight={maxHeight} minHeight={minHeight} />)}
-            </div>
+            </Paper>
+            <div>{data.map((s) => <MultiBox shift={s} />)}</div>
         </>
     );
 }

@@ -26,13 +26,6 @@ pub struct UserPass {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StartEnd {
-    pub username: String,
-    pub start_time: chrono::NaiveDateTime,
-    pub end_time: chrono::NaiveDateTime,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct StartEndWithoutId {
     pub start_time: chrono::NaiveDateTime,
     pub end_time: chrono::NaiveDateTime,
 }
@@ -94,7 +87,6 @@ async fn get_schedules(
 ) -> Result<HttpResponse, error::Error> {
     use diesel::ExpressionMethods;
     use diesel::QueryDsl;
-    use diesel::RunQueryDsl;
     use qstring::QString;
     use schema::schedules;
     let qs = QString::from(req.query_string());
@@ -128,7 +120,7 @@ async fn get_schedules(
 async fn update_schedule(
     req: HttpRequest,
     web::Path(id): web::Path<i64>,
-    se: web::Json<StartEndWithoutId>,
+    se: web::Json<StartEnd>,
     conn: web::Data<r2d2::Pool<ConnectionManager<PgConnection>>>,
 ) -> Result<HttpResponse, error::Error> {
     use diesel::ExpressionMethods;
@@ -161,12 +153,12 @@ async fn add_schedule(
     se: web::Json<StartEnd>,
     conn: web::Data<r2d2::Pool<ConnectionManager<PgConnection>>>,
 ) -> Result<HttpResponse, error::Error> {
-    let _ = auth(&req, &se.username).ok_or(error::ErrorUnauthorized("unauthorized error"))?;
+    let user = auth_without_name(&req).ok_or(error::ErrorUnauthorized("unauthorized error"))?;
     conn.get()
         .ok()
         .ok_or(error::Error::from(MyError::InternalError))
         .and_then(|conn| {
-            create_schedule(&conn, &se.username, &se.start_time, &se.end_time, &false)
+            create_schedule(&conn, &user, &se.start_time, &se.end_time, &false)
                 .map_err(|x| error::Error::from(MyError::QueryError(x)))
                 .map(|x| HttpResponse::Ok().json(x))
         })

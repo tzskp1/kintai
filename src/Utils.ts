@@ -31,7 +31,7 @@ export const getToken = () => {
     }
 };
 
-export const postSchedule = async (username: string, startTime: Date, endTime: Date) => {
+export const postSchedule = async (startTime: Date, endTime: Date) => {
     let token = getToken();
     if (!token) return undefined;
     let res = await fetch("/api/schedules", {
@@ -41,7 +41,6 @@ export const postSchedule = async (username: string, startTime: Date, endTime: D
             'Authorization': "bearer " + token,
         },
         body: JSON.stringify({
-            username,
             start_time: startTime.toISOString().replace('Z', ''),
             end_time: endTime.toISOString().replace('Z', '')
         })
@@ -81,6 +80,29 @@ export const getSchedules = async () => {
                 end_time: new Date(x.end_time + 'Z')
             }
         }) as Shift[];
+    } else {
+        return undefined;
+    }
+};
+
+export const day = 24 * 60 * 60 * 1000;
+
+export const updateSchedule = async (id: number, startTime: Date, endTime: Date) => {
+    let token = getToken();
+    if (!token) return undefined;
+    let res = await fetch(`/api/schedules/${id}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': "bearer " + token,
+        },
+        body: JSON.stringify({
+            start_time: startTime.toISOString().replace('Z', ''),
+            end_time: endTime.toISOString().replace('Z', '')
+        })
+    });
+    if (res.ok) {
+        return await res.json();
     } else {
         return undefined;
     }
