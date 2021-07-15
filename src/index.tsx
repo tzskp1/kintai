@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
-import Employee from './Empolyee';
+import Schedule from './Schedule';
 import Login from './Login';
 import reportWebVitals from './reportWebVitals';
 import { BrowserRouter, Route, Switch, Redirect } from "react-router-dom";
@@ -8,7 +8,7 @@ import { BrowserRouter, Route, Switch, Redirect } from "react-router-dom";
 ReactDOM.render(
     <BrowserRouter>
         <Switch>
-            <Route path="/employee" component={Employee} />
+            <Route path="/employee" component={Schedule} />
             <Route path="/login" component={Login} />
             <Redirect from="/" to="/login" />
         </Switch>

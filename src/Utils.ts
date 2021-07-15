@@ -107,3 +107,16 @@ export const updateSchedule = async (id: number, startTime: Date, endTime: Date)
         return undefined;
     }
 };
+
+export const addDay = (d: Date, days: number) => {
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate() + days, d.getHours(), d.getMinutes(), d.getSeconds(), d.getMilliseconds());
+}
+
+export const toDate = (d: Date) => {
+    let t = new Date(d);
+    t.setHours(0);
+    t.setMinutes(0);
+    t.setSeconds(0);
+    t.setMilliseconds(0);
+    return t;
+}

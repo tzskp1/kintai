@@ -13,8 +13,8 @@ import LockOutlinedIcon from '@material-ui/icons/LockOutlined';
 import Typography from '@material-ui/core/Typography';
 import { makeStyles } from '@material-ui/core/styles';
 import Container from '@material-ui/core/Container';
-import { login, decodeJwt, getToken } from './Utils'
-import { withRouter } from "react-router-dom";
+import { login, getToken } from './Utils'
+import { useHistory } from 'react-router-dom';
 
 const useStyles = makeStyles((theme) => ({
     paper: {
@@ -36,15 +36,16 @@ const useStyles = makeStyles((theme) => ({
     },
 }));
 
-function SignIn(props: any) {
+export default function SignIn({ }) {
+    const history = useHistory();
     const classes = useStyles();
     const [email, setEmail] = useState('');
     const [pass, setPass] = useState('');
     useEffect(() => {
         if (getToken()) {
-            props.history.push('/employee');
+            history.push('/employee');
         }
-    }, []);
+    }, [history]);
 
     return (
         <Container component="main" maxWidth="xs">
@@ -90,7 +91,7 @@ function SignIn(props: any) {
                         onClick={async () => {
                             let t = await login(email, pass);
                             localStorage.setItem('token', t);
-                            props.history.push('/employee');
+                            history.push('/employee');
                         }}
                     >
                         ログイン
@@ -100,5 +101,3 @@ function SignIn(props: any) {
         </Container>
     );
 }
-
-export default withRouter(SignIn);

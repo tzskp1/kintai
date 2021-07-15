@@ -1,9 +1,7 @@
-import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Paper from '@material-ui/core/Paper';
-import AppBar from '@material-ui/core/AppBar';
 import CssBaseline from '@material-ui/core/CssBaseline';
 import Divider from '@material-ui/core/Divider';
-import Drawer from '@material-ui/core/Drawer';
 import Hidden from '@material-ui/core/Hidden';
 import IconButton from '@material-ui/core/IconButton';
 import InboxIcon from '@material-ui/icons/MoveToInbox';
@@ -13,7 +11,6 @@ import ListItemIcon from '@material-ui/core/ListItemIcon';
 import ListItemText from '@material-ui/core/ListItemText';
 import MailIcon from '@material-ui/icons/Mail';
 import MenuIcon from '@material-ui/icons/Menu';
-import Toolbar from '@material-ui/core/Toolbar';
 import Typography from '@material-ui/core/Typography';
 import Table from '@material-ui/core/Table';
 import TableBody from '@material-ui/core/TableBody';
@@ -21,13 +18,11 @@ import TableCell from '@material-ui/core/TableCell';
 import TableHead from '@material-ui/core/TableHead';
 import TableRow from '@material-ui/core/TableRow';
 import { makeStyles, useTheme, Theme, createStyles } from '@material-ui/core/styles';
-import { BrowserRouter, Route, Switch, Redirect, Link } from "react-router-dom";
 import Box from '@material-ui/core/Box';
 import { sizing, palette, positions } from '@material-ui/system';
-import { getSchedules, seq, Shift, day, updateSchedule } from './Utils';
+import { getSchedules, seq, Shift, day, updateSchedule, getToken, addDay, toDate } from './Utils';
 import { useResizeDetector } from 'react-resize-detector';
-
-const drawerWidth = 240;
+import { useHistory } from 'react-router-dom';
 
 const useStyles = makeStyles((theme: Theme) =>
     createStyles({
@@ -46,30 +41,9 @@ const useStyles = makeStyles((theme: Theme) =>
     }),
 );
 
-interface Props {
-    /**
-     * Injected by the documentation to work in an iframe.
-     * You won't need it on your project.
-     */
-    window?: () => Window;
-}
-
-const addDay = (d: Date, days: number) => {
-    return new Date(d.getFullYear(), d.getMonth(), d.getDate() + days, d.getHours(), d.getMinutes(), d.getSeconds(), d.getMilliseconds());
-}
-
-const toDate = (d: Date) => {
-    let t = new Date(d);
-    t.setHours(0);
-    t.setMinutes(0);
-    t.setSeconds(0);
-    t.setMilliseconds(0);
-    return t;
-}
-
 type MultiBoxProp = {
     onDown?: (_: Shift) => Promise<void>,
-    onUp?: (_: Shift) => Promise<void>,
+    onUp: (_: Shift) => Promise<void>,
     shift: Shift
 }
 
@@ -82,11 +56,12 @@ const index2unixtime = (i: number) => {
     return i * (30 * 60 * 1000);
 }
 
-export default function Schedule(props: Props) {
+export default function Schedule() {
+    const history = useHistory();
+    const classes = useStyles();
     const [data, setData] = useState<Shift[]>([]);
     const [currentDate, setDate] = useState(new Date());
     const startDate = toDate(addDay(currentDate, -currentDate.getDay()));
-    const classes = useStyles();
     const cells = useRef<any[][]>(seq(48).map((_) => seq(7).map((_) => undefined)));
     const anchors = useRef<number[][][]>(seq(49).map((_) => seq(7).map((_) => [-1, -1])));
     const [cw, setCw] = useState(100); // column width
@@ -115,10 +90,13 @@ export default function Schedule(props: Props) {
     useEffect(onResize, [onResize]);
     useEffect(() => {
         (async () => {
+            if (!getToken()) {
+                history.push('/login');
+            }
             let schs = await getSchedules();
             if (schs) setData(schs);
         })();
-    }, []);
+    }, [history]);
     const sch2boxes = (s: Shift): [number, number, number, number][] => {
         const st = date2index(s.start_time);
         const end = date2index(s.end_time);
@@ -169,16 +147,20 @@ export default function Schedule(props: Props) {
         return [nx, y] as [number, number];
     }, [cw]);
 
-    const MultiBox = ({ shift, onUp = (x) => { return new Promise(() => { return; }); }, onDown = (x) => { return new Promise(() => { return; }); } }: MultiBoxProp) => {
+    const MultiBox = ({ shift, onUp, onDown = (x) => { return new Promise(() => { return; }); } }: MultiBoxProp) => {
         const [sft, setSft] = useState(shift);
+        const sch = useRef(shift);
         const sel = useRef(0);
         const isDrg = useRef(false);
         const isRsz = useRef(false);
+        const isUp = useRef(false);
         const ox = useRef(0);
         const oy = useRef(0);
-        useEffect(() => setSft(shift), [shift]);
+        useEffect(() => {
+            sch.current = shift;
+            setSft(shift);
+        }, [shift]);
         const onMove = async (e: any) => {
-            console.log(isRsz.current);
             if (!isDrg.current && !isRsz.current) return;
             let bd = e.target.ownerDocument.scrollingElement;
             const [px, py] = procXY([[e.clientX + bd.scrollLeft - ox.current, ox.current], [e.clientY + bd.scrollTop - oy.current, oy.current]]);
@@ -191,10 +173,14 @@ export default function Schedule(props: Props) {
             if (isDrg.current) {
                 const start_time = new Date(sft.start_time.getTime() + dy + dx * day);
                 const end_time = new Date(sft.end_time.getTime() + dy + dx * day);
-                setSft({ ...sft, start_time, end_time });
+                const s = { ...sft, start_time, end_time };
+                setSft(s);
+                sch.current = s;
             } else if (isRsz.current) {
                 const end_time = new Date(sft.end_time.getTime() + dy);
-                setSft({ ...sft, end_time });
+                const s = { ...sft, end_time };
+                setSft(s);
+                sch.current = s;
             }
         };
         const _onUp = async (e: any) => {
@@ -205,12 +191,16 @@ export default function Schedule(props: Props) {
             let el = e.target.ownerDocument;
             el.removeEventListener('mousemove', onMove, { capture: true });
             el.removeEventListener('mouseup', _onUp, { capture: true });
-            await onUp(sft);
+            if (!isUp.current) {
+                isUp.current = true;
+                await onUp(sch.current);
+            }
         };
         const _onDown = (i: number) => async (e: any) => {
             ox.current = e.nativeEvent.offsetX;
             oy.current = e.nativeEvent.offsetY;
             sel.current = i;
+            isUp.current = false;
             isRsz.current = false;
             isDrg.current = true;
             const bxs = sch2boxes(sft);
@@ -225,7 +215,7 @@ export default function Schedule(props: Props) {
             let el = e.target.ownerDocument;
             el.addEventListener('mouseup', _onUp, { capture: true });
             el.addEventListener('mousemove', onMove, { capture: true });
-            await onDown(sft);
+            await onDown(sch.current);
         };
         return (
             <div>
@@ -235,6 +225,18 @@ export default function Schedule(props: Props) {
                 })}
             </div>
         );
+    }
+
+    const onUp = async (s: Shift) => {
+        const ret = await updateSchedule(s.id, s.start_time, s.end_time);
+        if (ret) {
+            const i = data.findIndex((x) => x.id === s.id);
+            let nd = [...data];
+            nd[i] = s;
+            setData(nd);
+        } else if (!getToken()) {
+            history.push('/login');
+        }
     }
 
     return (
@@ -269,7 +271,7 @@ export default function Schedule(props: Props) {
                     </TableBody>
                 </Table>
             </Paper>
-            <div>{data.map((s) => <MultiBox shift={s} />)}</div>
+            <div>{data.map((s) => <MultiBox shift={s} onUp={onUp} />)}</div>
         </>
     );
 }
