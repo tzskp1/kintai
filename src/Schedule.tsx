@@ -90,13 +90,12 @@ type DragBoxProp = {
 }
 
 type MultiBoxProp = {
-    cw?: number,
     minHeight?: number,
     maxHeight?: number,
     procXY: (_: [[number, number], [number, number]]) => [number, number],
-    onDown?: (_: [number, number, number, number][]) => Promise<void>,
-    onUp?: (_: [number, number, number, number][]) => Promise<void>,
-    boxes: [number, number, number, number][]
+    onDown?: (_: Shift) => Promise<void>,
+    onUp?: (_: Shift) => Promise<void>,
+    shift: Shift
 }
 
 const DragBox = ({ procXY, onUp, onDown, width, height, initX, initY }: DragBoxProp) => {
@@ -140,98 +139,13 @@ const DragBox = ({ procXY, onUp, onDown, width, height, initX, initY }: DragBoxP
     );
 }
 
-const MultiBox = ({ cw = 100, maxHeight = 1000, minHeight = 1000, boxes, procXY, onUp = (x) => { return new Promise(() => { return; }); }, onDown = (x) => { return new Promise(() => { return; }); } }: MultiBoxProp) => {
-    const [bxs, setBxs] = useState(boxes);
-    const sel = useRef(0);
-    const isDrg = useRef(false);
-    const ox = useRef(0);
-    const oy = useRef(0);
-    useEffect(() => setBxs(boxes), [boxes]);
-    const onMove = async (e: any) => {
-        if (!isDrg.current) return;
-        let bd = e.target.ownerDocument.scrollingElement;
-        const [px, py] = procXY([[e.clientX + bd.scrollLeft - ox.current, ox.current], [e.clientY + bd.scrollTop - oy.current, oy.current]]);
-        const x = bxs[sel.current][0];
-        const y = bxs[sel.current][1];
-        const dx = px - x;
-        const dy = py - y;
-        let nbs: [number, number, number, number][] = bxs.map((b) => {
-            const [x, y, w, h] = b;
-            return [x + dx, y + dy, w, h];
-        });
-        let pre = undefined;
-        nbs.forEach((b, i, _) => {
-            const [x, y, w, h] = b;
-            // if (h <= 0) return;
-            if (y + h > maxHeight) {
-                nbs[i][3] = maxHeight - y;
-                const rest = y + h - maxHeight;
-                if (i + 1 <= nbs.length - 1) {
-                    const b = nbs[i + 1][1] + nbs[i + 1][3];
-                    nbs[i + 1][1] = nbs[i + 1][1] - rest;
-                    nbs[i + 1][3] = b - nbs[i + 1][1];
-                } else {
-                    nbs.push([x + cw, minHeight, cw, rest]);
-                }
-            }
-        });
-
-        nbs.reverse().forEach((b, j, _) => {
-            const [x, y, w, h] = b;
-            const i = nbs.length - 1 - j;
-            // if (h <= 0) return;
-            if (y < minHeight) {
-                nbs[i][1] = minHeight;
-                const rest = minHeight - y;
-                nbs[i][3] = h - rest;
-                if (0 <= i - 1) {
-                    console.log(nbs);
-                    nbs[i - 1][3] = nbs[i - 1][3] + rest;
-                } else {
-                    pre = [x - cw, maxHeight - rest, cw, rest];
-                }
-            }
-        });
-        if (pre) nbs.unshift(pre);
-        // nbs = nbs.filter((b) => {
-        //     const [x, y, w, h] = b;
-        //     return h > 0 && y <= maxHeight && minHeight <= y;
-        // });
-        setBxs(nbs);
-    };
-    const _onUp = async (e: any) => {
-        ox.current = 0;
-        oy.current = 0;
-        isDrg.current = false;
-        let el = e.target.ownerDocument;
-        el.removeEventListener('mousemove', onMove, { capture: true });
-        el.removeEventListener('mouseup', _onUp, { capture: true });
-        await onUp(bxs);
-    };
-    const _onDown = (i: number) => async (e: any) => {
-        ox.current = e.nativeEvent.offsetX;
-        oy.current = e.nativeEvent.offsetY;
-        sel.current = i;
-        console.log(i);
-        isDrg.current = true;
-        let el = e.target.ownerDocument;
-        el.addEventListener('mouseup', _onUp, { capture: true });
-        el.addEventListener('mousemove', onMove, { capture: true });
-        await onDown(bxs);
-    }
-    return (
-        <div  >
-            {bxs.map((b, i, _) => {
-                const [x, y, w, h] = b;
-                return (<Box width={w} height={h} sx={{ bgcolor: "red", position: 'absolute', left: x, top: y, }} onMouseDown={_onDown(i)} onMouseUp={_onUp} />);
-            })}
-        </div>
-    );
-}
-
 const date2index = (d: Date) => {
     let t = d.getTime() - toDate(d).getTime();
     return t / (30 * 60 * 1000);
+}
+
+const index2unixtime = (i: number) => {
+    return i * (30 * 60 * 1000);
 }
 
 export default function Schedule(props: Props) {
@@ -270,50 +184,102 @@ export default function Schedule(props: Props) {
             if (schs) setData(schs);
         })();
     }, []);
-    const schs2boxes = (schs: Shift[]) => {
-        return schs.map((s) => {
-            const st = date2index(s.start_time);
-            const end = date2index(s.end_time);
-            const a = anchors.current;
-            if (s.start_time.getDay() !== s.end_time.getDay()) {
-                const sx = s.start_time.getDay() - startDate.getDay();
-                const ex = s.end_time.getDay() - startDate.getDay();
-                let dst = [];
-                if (sx < 7 && 0 <= sx) {
-                    const l = sx * cw + a[0][0][0];
-                    const t = st * rh + a[0][0][1];
-                    const b = a[47][sx][1] + rh;
+    const sch2boxes = (s: Shift): [number, number, number, number][] => {
+        const st = date2index(s.start_time);
+        const end = date2index(s.end_time);
+        const a = anchors.current;
+        if (s.start_time.getDay() !== s.end_time.getDay()) {
+            const sx = s.start_time.getDay() - startDate.getDay();
+            const ex = s.end_time.getDay() - startDate.getDay();
+            let dst = [];
+            if (sx < 7 && 0 <= sx) {
+                const l = sx * cw + a[0][0][0];
+                const t = st * rh + a[0][0][1];
+                const b = a[47][sx][1] + rh;
+                dst.push([l, t, cw, b - t]);
+            }
+            let i;
+            for (i = sx + 1; i < ex; i++) {
+                if (i < 7 && 0 <= i) {
+                    const l = a[0][i][0];
+                    const t = a[0][i][1];
+                    const b = a[47][i][1] + rh;
                     dst.push([l, t, cw, b - t]);
-                }
-                let i;
-                for (i = sx + 1; i < ex; i++) {
-                    if (i < 7 && 0 <= i) {
-                        const l = a[0][i][0];
-                        const t = a[0][i][1];
-                        const b = a[47][i][1] + rh;
-                        dst.push([l, t, cw, b - t]);
-                    }
-                }
-                if (ex < 7 && 0 <= ex) {
-                    const l = a[0][ex][0];
-                    const t = a[0][ex][1];
-                    const b = end * rh + a[0][0][1];
-                    dst.push([l, t, cw, b - t]);
-                }
-                return dst;
-            } else {
-                const x = s.start_time.getDay() - startDate.getDay();
-                if (x < 7 && 0 <= x) {
-                    const l = x * cw + a[0][0][0];
-                    const t = st * rh + a[0][0][1];
-                    const b = end * rh + a[0][0][1];
-                    return [[l, t, cw, b - t]];
-                } else {
-                    return [];
                 }
             }
-        }).filter((x) => x !== []) as [number, number, number, number][][];
+            if (ex < 7 && 0 <= ex) {
+                const l = a[0][ex][0];
+                const t = a[0][ex][1];
+                const b = end * rh + a[0][0][1];
+                dst.push([l, t, cw, b - t]);
+            }
+            return dst as [number, number, number, number][];
+        } else {
+            const x = s.start_time.getDay() - startDate.getDay();
+            if (x < 7 && 0 <= x) {
+                const l = x * cw + a[0][0][0];
+                const t = st * rh + a[0][0][1];
+                const b = end * rh + a[0][0][1];
+                return [[l, t, cw, b - t]];
+            } else {
+                return [];
+            }
+        }
     }
+
+    const MultiBox = ({ maxHeight = 1000, minHeight = 1000, shift, procXY, onUp = (x) => { return new Promise(() => { return; }); }, onDown = (x) => { return new Promise(() => { return; }); } }: MultiBoxProp) => {
+        const [sft, setSft] = useState(shift);
+        const sel = useRef(0);
+        const isDrg = useRef(false);
+        const ox = useRef(0);
+        const oy = useRef(0);
+        useEffect(() => setSft(shift), [shift]);
+        const onMove = async (e: any) => {
+            if (!isDrg.current) return;
+            let bd = e.target.ownerDocument.scrollingElement;
+            const [px, py] = procXY([[e.clientX + bd.scrollLeft - ox.current, ox.current], [e.clientY + bd.scrollTop - oy.current, oy.current]]);
+            const bxs = sch2boxes(sft);
+            const x = bxs[sel.current][0];
+            const y = bxs[sel.current][1];
+            let dx = (px - x) / cw;
+            let dy = (py - y) / rh;
+            dy = index2unixtime(dy);
+            const day = 24 * 60 * 60 * 1000;
+            const start_time = new Date(sft.start_time.getTime() + dy + dx * day);
+            const end_time = new Date(sft.end_time.getTime() + dy + dx * day);
+            console.log(dx);
+            setSft({ ...sft, start_time, end_time });
+        };
+        const _onUp = async (e: any) => {
+            ox.current = 0;
+            oy.current = 0;
+            isDrg.current = false;
+            let el = e.target.ownerDocument;
+            el.removeEventListener('mousemove', onMove, { capture: true });
+            el.removeEventListener('mouseup', _onUp, { capture: true });
+            await onUp(sft);
+        };
+        const _onDown = (i: number) => async (e: any) => {
+            ox.current = e.nativeEvent.offsetX;
+            oy.current = e.nativeEvent.offsetY;
+            sel.current = i;
+            console.log(i);
+            isDrg.current = true;
+            let el = e.target.ownerDocument;
+            el.addEventListener('mouseup', _onUp, { capture: true });
+            el.addEventListener('mousemove', onMove, { capture: true });
+            await onDown(sft);
+        }
+        return (
+            <div  >
+                {sch2boxes(sft).map((b, i, _) => {
+                    const [x, y, w, h] = b;
+                    return (<Box width={w} height={h} sx={{ bgcolor: "red", position: 'absolute', left: x, top: y, }} onMouseDown={_onDown(i)} onMouseUp={_onUp} />);
+                })}
+            </div>
+        );
+    }
+
 
     const procXY = useCallback(([[x, ox], [y, oy]]: [[number, number], [number, number]]) => {
         const a = anchors.current;
@@ -355,7 +321,7 @@ export default function Schedule(props: Props) {
                 </Table>
             </Paper >
             <div>
-                {schs2boxes(data).map((bs) => <MultiBox boxes={bs} procXY={procXY} maxHeight={maxHeight} minHeight={minHeight} cw={cw} />)}
+                {data.map((s) => <MultiBox shift={s} procXY={procXY} maxHeight={maxHeight} minHeight={minHeight} />)}
             </div>
         </>
     );
