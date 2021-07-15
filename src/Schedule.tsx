@@ -216,9 +216,10 @@ export default function Schedule(props: Props) {
             const bxs = sch2boxes(sft);
             if (i === bxs.length - 1) {
                 const [x, y, w, h] = bxs[i];
-                if (Math.abs(e.clientY - (y + h)) < drgSense && Math.abs(e.clientX - (x + w)) < cw) {
-                    isDrg.current = false;
+                let bd = e.target.ownerDocument.scrollingElement;
+                if (Math.abs(e.clientY + bd.scrollTop - (y + h)) < drgSense && Math.abs(e.clientX + bd.scrollLeft - (x + w)) < cw) {
                     isRsz.current = true;
+                    isDrg.current = false;
                 }
             }
             let el = e.target.ownerDocument;
