@@ -90,10 +90,12 @@ type DragBoxProp = {
 }
 
 type MultiBoxProp = {
-    onCrash?: (_: number) => Promise<void>,
+    cw?: number,
+    minHeight?: number,
+    maxHeight?: number,
     procXY: (_: [[number, number], [number, number]]) => [number, number],
-    onDown?: (_: [number, number]) => Promise<void>,
-    onUp?: (_: [number, number]) => Promise<void>,
+    onDown?: (_: [number, number, number, number][]) => Promise<void>,
+    onUp?: (_: [number, number, number, number][]) => Promise<void>,
     boxes: [number, number, number, number][]
 }
 
@@ -138,19 +140,90 @@ const DragBox = ({ procXY, onUp, onDown, width, height, initX, initY }: DragBoxP
     );
 }
 
-const MultiBox = ({ boxes, onCrash = (x) => { return new Promise(() => { return; }); }, procXY, onUp = (x) => { return new Promise(() => { return; }); }, onDown = (x) => { return new Promise(() => { return; }); } }: MultiBoxProp) => {
-    const [num, setNum] = useState(-1);
-    useEffect(() => setNum(-1), [boxes]);
+const MultiBox = ({ cw = 100, maxHeight = 1000, minHeight = 1000, boxes, procXY, onUp = (x) => { return new Promise(() => { return; }); }, onDown = (x) => { return new Promise(() => { return; }); } }: MultiBoxProp) => {
+    const [bxs, setBxs] = useState(boxes);
+    const sel = useRef(0);
+    const isDrg = useRef(false);
+    const ox = useRef(0);
+    const oy = useRef(0);
+    useEffect(() => setBxs(boxes), [boxes]);
+    const onMove = async (e: any) => {
+        if (!isDrg.current) return;
+        let bd = e.target.ownerDocument.scrollingElement;
+        const [px, py] = procXY([[e.clientX + bd.scrollLeft - ox.current, ox.current], [e.clientY + bd.scrollTop - oy.current, oy.current]]);
+        const x = bxs[sel.current][0];
+        const y = bxs[sel.current][1];
+        const dx = px - x;
+        const dy = py - y;
+        let nbs: [number, number, number, number][] = bxs.map((b) => {
+            const [x, y, w, h] = b;
+            return [x + dx, y + dy, w, h];
+        });
+        let pre = undefined;
+        nbs.forEach((b, i, _) => {
+            const [x, y, w, h] = b;
+            // if (h <= 0) return;
+            if (y + h > maxHeight) {
+                nbs[i][3] = maxHeight - y;
+                const rest = y + h - maxHeight;
+                if (i + 1 <= nbs.length - 1) {
+                    const b = nbs[i + 1][1] + nbs[i + 1][3];
+                    nbs[i + 1][1] = nbs[i + 1][1] - rest;
+                    nbs[i + 1][3] = b - nbs[i + 1][1];
+                } else {
+                    nbs.push([x + cw, minHeight, cw, rest]);
+                }
+            }
+        });
+
+        nbs.reverse().forEach((b, j, _) => {
+            const [x, y, w, h] = b;
+            const i = nbs.length - 1 - j;
+            // if (h <= 0) return;
+            if (y < minHeight) {
+                nbs[i][1] = minHeight;
+                const rest = minHeight - y;
+                nbs[i][3] = h - rest;
+                if (0 <= i - 1) {
+                    console.log(nbs);
+                    nbs[i - 1][3] = nbs[i - 1][3] + rest;
+                } else {
+                    pre = [x - cw, maxHeight - rest, cw, rest];
+                }
+            }
+        });
+        if (pre) nbs.unshift(pre);
+        // nbs = nbs.filter((b) => {
+        //     const [x, y, w, h] = b;
+        //     return h > 0 && y <= maxHeight && minHeight <= y;
+        // });
+        setBxs(nbs);
+    };
+    const _onUp = async (e: any) => {
+        ox.current = 0;
+        oy.current = 0;
+        isDrg.current = false;
+        let el = e.target.ownerDocument;
+        el.removeEventListener('mousemove', onMove, { capture: true });
+        el.removeEventListener('mouseup', _onUp, { capture: true });
+        await onUp(bxs);
+    };
+    const _onDown = (i: number) => async (e: any) => {
+        ox.current = e.nativeEvent.offsetX;
+        oy.current = e.nativeEvent.offsetY;
+        sel.current = i;
+        console.log(i);
+        isDrg.current = true;
+        let el = e.target.ownerDocument;
+        el.addEventListener('mouseup', _onUp, { capture: true });
+        el.addEventListener('mousemove', onMove, { capture: true });
+        await onDown(bxs);
+    }
     return (
-        <div>
-            {boxes.map((b, i, _) => {
+        <div  >
+            {bxs.map((b, i, _) => {
                 const [x, y, w, h] = b;
-                const _onDown = async (xy: [number, number]) => {
-                    setNum(i);
-                    await onCrash(i);
-                    await onDown(xy);
-                };
-                return (num === -1 || num === i ? <DragBox initX={x} initY={y} width={w} height={h} onDown={_onDown} procXY={procXY} onUp={onUp} /> : undefined);
+                return (<Box width={w} height={h} sx={{ bgcolor: "red", position: 'absolute', left: x, top: y, }} onMouseDown={_onDown(i)} onMouseUp={_onUp} />);
             })}
         </div>
     );
@@ -170,8 +243,8 @@ export default function Schedule(props: Props) {
     const anchors = useRef<number[][][]>(seq(48).map((_) => seq(7).map((_) => [-1, -1])));
     const [cw, setCw] = useState(100); // column width
     const [rh, setRh] = useState(50); // row height
-    const [x, setX] = useState(0);
-    const [y, setY] = useState(0);
+    const [maxHeight, setMh] = useState(0);
+    const [minHeight, setMih] = useState(0);
     const onResize = useCallback(() => {
         cells.current.forEach((v, i, _) =>
             v.forEach((r, j, _) => {
@@ -184,11 +257,11 @@ export default function Schedule(props: Props) {
                 }
             }));
         let rect = cells.current[0][0].getBoundingClientRect();
-        setX(anchors.current[0][1][0]);
-        setY(anchors.current[0][1][1]);
+        setMh(anchors.current[47][0][1] + rh);
+        setMih(anchors.current[0][0][1]);
         setCw(rect.width);
         setRh(rect.height);
-    }, [setCw, setRh, setX, setY]);
+    }, [setCw, setRh, setMh, rh, setMih]);
     const { ref } = useResizeDetector({ onResize });
     useEffect(onResize, [onResize]);
     useEffect(() => {
@@ -244,11 +317,10 @@ export default function Schedule(props: Props) {
 
     const procXY = useCallback(([[x, ox], [y, oy]]: [[number, number], [number, number]]) => {
         const a = anchors.current;
-        const i = Math.min(6, Math.max(0, Math.floor((x + ox - a[0][0][0]) / cw)));
+        const i = Math.min(6, Math.max(0, Math.floor((x + Math.min(ox, 0.5 * cw) - a[0][0][0]) / cw)));
         const nx = i * cw + a[0][0][0];
-        const ny = Math.min(a[47][i][1] + rh, Math.max(a[0][i][1], y));
-        return [nx, ny] as [number, number];
-    }, [cw]);
+        return [nx, y] as [number, number];
+    }, [cw, rh]);
 
     return (
         <>
@@ -283,7 +355,7 @@ export default function Schedule(props: Props) {
                 </Table>
             </Paper >
             <div>
-                {schs2boxes(data).map((bs) => <MultiBox boxes={bs} procXY={procXY} />)}
+                {schs2boxes(data).map((bs) => <MultiBox boxes={bs} procXY={procXY} maxHeight={maxHeight} minHeight={minHeight} cw={cw} />)}
             </div>
         </>
     );
