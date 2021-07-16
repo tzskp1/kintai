@@ -5,6 +5,7 @@ table! {
         start_time -> Timestamptz,
         end_time -> Timestamptz,
         permitted -> Bool,
+        absent -> Bool,
     }
 }
 

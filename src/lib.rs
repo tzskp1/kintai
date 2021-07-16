@@ -54,24 +54,6 @@ pub fn create_user<'a>(
         .or_else(|x| Err(CreateUserError::QueryError(x)))
 }
 
-pub fn create_schedule<'a>(
-    conn: &PgConnection,
-    username: &'a str,
-    start_time: &'a chrono::NaiveDateTime,
-    end_time: &'a chrono::NaiveDateTime,
-    permitted: &'a bool,
-) -> Result<Schedule, diesel::result::Error> {
-    use schema::schedules;
-    diesel::insert_into(schedules::table)
-        .values((
-            schedules::username.eq(username),
-            schedules::start_time.eq(start_time),
-            schedules::end_time.eq(end_time),
-            schedules::permitted.eq(permitted),
-        ))
-        .get_result::<Schedule>(conn)
-}
-
 #[derive(Serialize, Deserialize)]
 pub struct UserToken {
     // issued at

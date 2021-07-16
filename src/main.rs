@@ -9,7 +9,7 @@ use diesel::{
     r2d2::{self, ConnectionManager},
 };
 use kintai::models::Schedule;
-use kintai::{create_schedule, decode, establish_connection, login, schema};
+use kintai::{decode, establish_connection, login, schema};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::env;
@@ -153,12 +153,23 @@ async fn add_schedule(
     se: web::Json<StartEnd>,
     conn: web::Data<r2d2::Pool<ConnectionManager<PgConnection>>>,
 ) -> Result<HttpResponse, error::Error> {
+    use diesel::ExpressionMethods;
+    use diesel::QueryDsl;
+    use schema::schedules;
     let user = auth_without_name(&req).ok_or(error::ErrorUnauthorized("unauthorized error"))?;
     conn.get()
         .ok()
         .ok_or(error::Error::from(MyError::InternalError))
         .and_then(|conn| {
-            create_schedule(&conn, &user, &se.start_time, &se.end_time, &false)
+            diesel::insert_into(schedules::table)
+                .values((
+                    schedules::username.eq(&user),
+                    schedules::start_time.eq(&se.start_time),
+                    schedules::end_time.eq(&se.end_time),
+                    schedules::permitted.eq(&false),
+                    schedules::absent.eq(&false),
+                ))
+                .get_result::<Schedule>(&conn)
                 .map_err(|x| error::Error::from(MyError::QueryError(x)))
                 .map(|x| HttpResponse::Ok().json(x))
         })

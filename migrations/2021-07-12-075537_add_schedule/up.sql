@@ -5,7 +5,9 @@ CREATE TABLE schedules (
   start_time TIMESTAMP WITH TIME ZONE NOT NULL PRIMARY KEY,
   end_time TIMESTAMP WITH TIME ZONE NOT NULL,
   permitted BOOLEAN NOT NULL DEFAULT 'f',
+  absent BOOLEAN NOT NULL DEFAULT 'f',
   FOREIGN KEY (username) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
   CHECK (end_time > start_time),
+  CHECK (permitted OR NOT absent),
   UNIQUE (id)
 )

@@ -57,8 +57,8 @@ export type Shift = {
     start_time: Date;
     end_time: Date;
     permitted: boolean;
+    absent: boolean;
     username: string;
-    submitted: boolean;
     id: number
 }
 
@@ -77,7 +77,6 @@ export const getSchedules = async () => {
         return ret.map((x: any) => {
             return {
                 ...x,
-                submitted: true,
                 start_time: new Date(x.start_time + 'Z'),
                 end_time: new Date(x.end_time + 'Z')
             }

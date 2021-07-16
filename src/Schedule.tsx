@@ -20,7 +20,7 @@ import TableRow from '@material-ui/core/TableRow';
 import { makeStyles, useTheme, Theme, createStyles } from '@material-ui/core/styles';
 import Box from '@material-ui/core/Box';
 import { sizing, palette, positions } from '@material-ui/system';
-import { getSchedules, seq, Shift, day, updateSchedule, getToken, addDay, toDate, timeFormat } from './Utils';
+import { getSchedules, seq, Shift, day, updateSchedule, getToken, addDay, toDate, timeFormat, postSchedule, decodeJwt } from './Utils';
 import { useResizeDetector } from 'react-resize-detector';
 import { useHistory } from 'react-router-dom';
 
@@ -43,7 +43,6 @@ const useStyles = makeStyles((theme: Theme) =>
 
 type MultiBoxProp = {
     onDown?: (_: Shift) => Promise<void>,
-    onUp: (_: Shift) => Promise<void>,
     shift: Shift
 }
 
@@ -67,6 +66,7 @@ export default function Schedule() {
     const [cw, setCw] = useState(100); // column width
     const [rh, setRh] = useState(25); // row height
     const drgSense = 15;
+    const defaultLength = 60 * 60 * 1000; // 1 hour
     const onResize = useCallback(() => {
         cells.current.forEach((v, i, _) =>
             v.forEach((r, j, _) => {
@@ -147,7 +147,24 @@ export default function Schedule() {
         return [nx, y] as [number, number];
     }, [cw]);
 
-    const MultiBox = ({ shift, onUp, onDown = (x) => { return new Promise(() => { return; }); } }: MultiBoxProp) => {
+    const onUp = useCallback(async (s: Shift) => {
+        if (s.permitted) {
+            alert('許可されたシフトは変更できません'); // todo: replace
+            setData(data);
+            return;
+        }
+        const ret = await updateSchedule(s.id, s.start_time, s.end_time);
+        if (ret) {
+            const i = data.findIndex((x) => x.id === s.id);
+            let nd = [...data];
+            nd[i] = s;
+            setData(nd);
+        } else if (!getToken()) {
+            history.push('/login');
+        }
+    }, [history, data]);
+
+    const MultiBox = ({ shift, onDown = (x) => { return new Promise(() => { return; }); } }: MultiBoxProp) => {
         const [sft, setSft] = useState(shift);
         const sch = useRef(shift);
         const sel = useRef(0);
@@ -227,17 +244,17 @@ export default function Schedule() {
         );
     }
 
-    const onUp = async (s: Shift) => {
-        const ret = await updateSchedule(s.id, s.start_time, s.end_time);
-        if (ret) {
-            const i = data.findIndex((x) => x.id === s.id);
+    const onClickCell = useCallback((i: number, day: number) => async () => {
+        const start_time = new Date(addDay(startDate, day).getTime() + index2unixtime(i));
+        const end_time = new Date(start_time.getTime() + defaultLength);
+        const id = await postSchedule(start_time, end_time);
+        const t = getToken();
+        if (id && t) {
             let nd = [...data];
-            nd[i] = s;
+            nd.push({ start_time, end_time, id, permitted: false, absent: false, username: decodeJwt(t).user })
             setData(nd);
-        } else if (!getToken()) {
-            history.push('/login');
         }
-    }
+    }, [startDate, defaultLength, data]);
 
     return (
         <>
@@ -246,34 +263,34 @@ export default function Schedule() {
                     <TableHead>
                         <TableRow>
                             <TableCell />
-                            <TableCell style={{ borderLeft: '1px solid' }} width={cw}>{startDate.getDate()}</TableCell>
-                            <TableCell style={{ borderLeft: '1px solid' }} width={cw}>{addDay(startDate, 1).getDate()}</TableCell>
-                            <TableCell style={{ borderLeft: '1px solid' }} width={cw}>{addDay(startDate, 2).getDate()}</TableCell>
-                            <TableCell style={{ borderLeft: '1px solid' }} width={cw}>{addDay(startDate, 3).getDate()}</TableCell>
-                            <TableCell style={{ borderLeft: '1px solid' }} width={cw}>{addDay(startDate, 4).getDate()}</TableCell>
-                            <TableCell style={{ borderLeft: '1px solid' }} width={cw}>{addDay(startDate, 5).getDate()}</TableCell>
-                            <TableCell style={{ borderLeft: '1px solid' }} width={cw}>{addDay(startDate, 6).getDate()}</TableCell>
+                            <TableCell style={{ userSelect: 'none', borderLeft: '1px solid' }} width={cw}>{startDate.getDate()}</TableCell>
+                            <TableCell style={{ userSelect: 'none', borderLeft: '1px solid' }} width={cw}>{addDay(startDate, 1).getDate()}</TableCell>
+                            <TableCell style={{ userSelect: 'none', borderLeft: '1px solid' }} width={cw}>{addDay(startDate, 2).getDate()}</TableCell>
+                            <TableCell style={{ userSelect: 'none', borderLeft: '1px solid' }} width={cw}>{addDay(startDate, 3).getDate()}</TableCell>
+                            <TableCell style={{ userSelect: 'none', borderLeft: '1px solid' }} width={cw}>{addDay(startDate, 4).getDate()}</TableCell>
+                            <TableCell style={{ userSelect: 'none', borderLeft: '1px solid' }} width={cw}>{addDay(startDate, 5).getDate()}</TableCell>
+                            <TableCell style={{ userSelect: 'none', borderLeft: '1px solid' }} width={cw}>{addDay(startDate, 6).getDate()}</TableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>
                         {seq(48).map((i) => {
                             return (
                                 <TableRow style={{ height: '25px' }}>
-                                    <TableCell style={{ transform: `translateY(${-rh / 2}px)`, padding: "0px 16px" }}>{timeFormat(new Date(index2unixtime(i)))}</TableCell>
-                                    <TableCell ref={(r) => { cells.current[i][0] = r }} style={{ borderLeft: '1px solid', padding: "0px 16px" }} width={cw} />
-                                    <TableCell ref={(r) => { cells.current[i][1] = r }} style={{ borderLeft: '1px solid', padding: "0px 16px" }} width={cw} />
-                                    <TableCell ref={(r) => { cells.current[i][2] = r }} style={{ borderLeft: '1px solid', padding: "0px 16px" }} width={cw} />
-                                    <TableCell ref={(r) => { cells.current[i][3] = r }} style={{ borderLeft: '1px solid', padding: "0px 16px" }} width={cw} />
-                                    <TableCell ref={(r) => { cells.current[i][4] = r }} style={{ borderLeft: '1px solid', padding: "0px 16px" }} width={cw} />
-                                    <TableCell ref={(r) => { cells.current[i][5] = r }} style={{ borderLeft: '1px solid', padding: "0px 16px" }} width={cw} />
-                                    <TableCell ref={(r) => { cells.current[i][6] = r }} style={{ borderLeft: '1px solid', padding: "0px 16px" }} width={cw} />
+                                    <TableCell style={{ userSelect: 'none', transform: `translateY(${-rh / 2}px)`, padding: "0px 16px" }}>{timeFormat(new Date(index2unixtime(i)))}</TableCell>
+                                    <TableCell ref={(r) => { cells.current[i][0] = r }} style={{ borderLeft: '1px solid', padding: "0px 16px" }} width={cw} onClick={onClickCell(i, 0)} />
+                                    <TableCell ref={(r) => { cells.current[i][1] = r }} style={{ borderLeft: '1px solid', padding: "0px 16px" }} width={cw} onClick={onClickCell(i, 1)} />
+                                    <TableCell ref={(r) => { cells.current[i][2] = r }} style={{ borderLeft: '1px solid', padding: "0px 16px" }} width={cw} onClick={onClickCell(i, 2)} />
+                                    <TableCell ref={(r) => { cells.current[i][3] = r }} style={{ borderLeft: '1px solid', padding: "0px 16px" }} width={cw} onClick={onClickCell(i, 3)} />
+                                    <TableCell ref={(r) => { cells.current[i][4] = r }} style={{ borderLeft: '1px solid', padding: "0px 16px" }} width={cw} onClick={onClickCell(i, 4)} />
+                                    <TableCell ref={(r) => { cells.current[i][5] = r }} style={{ borderLeft: '1px solid', padding: "0px 16px" }} width={cw} onClick={onClickCell(i, 5)} />
+                                    <TableCell ref={(r) => { cells.current[i][6] = r }} style={{ borderLeft: '1px solid', padding: "0px 16px" }} width={cw} onClick={onClickCell(i, 6)} />
                                 </TableRow>
                             );
                         })}
                     </TableBody>
                 </Table>
             </Paper>
-            <div>{data.map((s) => <MultiBox shift={s} onUp={onUp} />)}</div>
+            <div>{data.map((s) => <MultiBox shift={s} />)}</div>
         </>
     );
 }
