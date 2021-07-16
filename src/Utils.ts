@@ -125,3 +125,13 @@ export const toDate = (d: Date) => {
 export const timeFormat = (d: Date) => {
     return `${d.getUTCHours().toString().padStart(2, '0')}:${d.getUTCMinutes().toString().padStart(2, '0')}`;
 }
+
+export const iter = <T>(f: (_: T) => T, n: number): (_: T) => T => (x: T) => {
+    let i;
+    for (i = 0; i < n; i++) {
+        x = f(x);
+    }
+    return x;
+};
+
+export const id = <T>(x: T): T => x;

@@ -20,7 +20,7 @@ import TableRow from '@material-ui/core/TableRow';
 import { makeStyles, useTheme, Theme, createStyles } from '@material-ui/core/styles';
 import Box from '@material-ui/core/Box';
 import { sizing, palette, positions } from '@material-ui/system';
-import { getSchedules, seq, Shift, day, updateSchedule, getToken, addDay, toDate, timeFormat, postSchedule, decodeJwt } from './Utils';
+import { getSchedules, seq, Shift, day, updateSchedule, getToken, addDay, toDate, timeFormat, postSchedule, decodeJwt, iter, id } from './Utils';
 import { useResizeDetector } from 'react-resize-detector';
 import { useHistory } from 'react-router-dom';
 
@@ -156,10 +156,11 @@ export default function Schedule() {
     }
     const lanes = calcLaneArray(data);
     const fixBox = (b: [number, number, number, number]): [number, number, number, number] => {
+        const r = 0.8;
         const [x, y, w, h] = b;
-        return [x + w / 2, y, w / 2, h];
+        return [x + w * (1 - r), y, w * r, h];
     }
-    const sch2boxes = (s: Shift): [number, number, number, number][] => {
+    const sch2boxes = (s: Shift, fix = true): [number, number, number, number][] => {
         const st = date2index(s.start_time);
         const end = date2index(s.end_time);
         const a = anchors.current;
@@ -170,13 +171,7 @@ export default function Schedule() {
             const ret = lanes[Math.floor(st)][sx].find((x) => x[0] === s.id);
             let ln = 0;
             if (ret) ln = ret[1];
-            const fb = (bx: [number, number, number, number]) => {
-                let i;
-                for (i = 0; i < ln; i++) {
-                    bx = fixBox(bx);
-                }
-                return bx;
-            }
+            const fb = fix ? iter(fixBox, ln) : id;
             let dst = [];
             if (sx < 7 && 0 <= sx) {
                 const l = a[Math.floor(st)][sx][0] + (a[Math.floor(st) + 1][sx][0] - a[Math.floor(st)][sx][0]) * (st - Math.floor(st));
@@ -201,17 +196,11 @@ export default function Schedule() {
             }
             return dst as [number, number, number, number][];
         } else {
-            const x = s.start_time.getDay() - startDate.getDay();
+            const x = Math.floor((s.start_time.getTime() - startDate.getTime()) / day);
             const ret = lanes[Math.floor(st)][x].find((x) => x[0] === s.id);
             let ln = 0;
             if (ret) ln = ret[1];
-            const fb = (bx: [number, number, number, number]) => {
-                let i;
-                for (i = 0; i < ln; i++) {
-                    bx = fixBox(bx);
-                }
-                return bx;
-            }
+            const fb = fix ? iter(fixBox, ln) : id;
             if (x < 7 && 0 <= x) {
                 const l = a[Math.floor(st)][x][0] + (a[Math.floor(st) + 1][x][0] - a[Math.floor(st)][x][0]) * (st - Math.floor(st));
                 const t = a[Math.floor(st)][x][1] + (a[Math.floor(st) + 1][x][1] - a[Math.floor(st)][x][1]) * (st - Math.floor(st));
@@ -224,13 +213,12 @@ export default function Schedule() {
     }
 
     const date2zindex = (d: Date) => {
-        return Math.floor(d.getTime() / (60 * 1000));
-        // return Math.floor((addDay(startDate, 7).getTime() - d.getTime()) / (60 * 1000));
+        return Math.floor((d.getTime() - startDate.getTime()) / (60 * 1000));
     }
 
     const procXY = useCallback(([[x, ox], [y, oy]]: [[number, number], [number, number]]) => {
         const a = anchors.current;
-        const i = Math.min(6, Math.max(0, Math.floor((x + Math.min(ox, 0.5 * cw) - a[0][0][0]) / cw)));
+        const i = Math.min(6, Math.max(0, Math.floor((x + ox - a[0][0][0]) / cw)));
         const nx = i * cw + a[0][0][0];
         return [nx, y] as [number, number];
     }, [cw]);
@@ -269,7 +257,7 @@ export default function Schedule() {
             if (!isDrg.current && !isRsz.current) return;
             let bd = e.target.ownerDocument.scrollingElement;
             const [px, py] = procXY([[e.clientX + bd.scrollLeft - ox.current, ox.current], [e.clientY + bd.scrollTop - oy.current, oy.current]]);
-            const bxs = sch2boxes(sft);
+            const bxs = sch2boxes(sft, false);
             const x = bxs[sel.current][0];
             const y = bxs[sel.current][1];
             let dx = (px - x) / cw;
