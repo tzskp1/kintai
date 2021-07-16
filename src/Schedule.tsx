@@ -263,19 +263,21 @@ export default function Schedule() {
         const oy = useRef(0);
         const x = useRef(0);
         const y = useRef(0);
-        const [anchorEl, setAnchorEl] = useState<HTMLDivElement | undefined>(undefined);
+        const [px, setPx] = useState(0);
+        const [py, setPy] = useState(0);
+        const [anchorEl, setAnchorEl] = useState<HTMLElement | undefined>(undefined);
         useEffect(() => {
             sch.current = shift;
             setSft(shift);
         }, [shift]);
 
-        const handleClick = (event: React.MouseEvent<HTMLDivElement>) => {
-            setAnchorEl(event.currentTarget);
+        const handleClick = (w: number, h: number) => (event: React.MouseEvent<HTMLDivElement>) => {
+            setPx(w);
+            setPy(h);
+            setAnchorEl(event.currentTarget.ownerDocument.body);
         };
 
-        const handleClose = () => {
-            setAnchorEl(undefined);
-        };
+        const handleClose = () => setAnchorEl(undefined);
 
         const onMove = async (e: any) => {
             if (!isDrg.current && !isRsz.current) return;
@@ -342,10 +344,10 @@ export default function Schedule() {
         const id = open ? `multibox-popover${sft.id}` : undefined;
         return (
             <div>
-                <div aria-describedby={id} onDoubleClick={handleClick}>
+                <div>
                     {sch2boxes(sft).map((b, i, _) => {
                         const [x, y, w, h] = b;
-                        return (<Box width={w} height={h} boxShadow={3} style={{ userSelect: 'none', }} sx={{ zIndex: shift2zindex(sft), bgcolor: "red", position: 'absolute', left: x, top: y, }} onMouseDown={_onDown(i)} onMouseUp={_onUp}>{i === 0 ? sft.username : undefined}</Box>);
+                        return (<Box aria-describedby={id} width={w} height={h} boxShadow={3} style={{ userSelect: 'none', }} sx={{ zIndex: shift2zindex(sft), bgcolor: "red", position: 'absolute', left: x, top: y, }} onMouseDown={_onDown(i)} onDoubleClick={handleClick(x, y)} onMouseUp={_onUp}>{i === 0 ? sft.username : undefined}</Box>);
                     })}
                 </div>
                 <Popover
@@ -353,13 +355,15 @@ export default function Schedule() {
                     open={open}
                     anchorEl={anchorEl}
                     onClose={handleClose}
+                    anchorPosition={{ left: px, top: py }}
+                    anchorReference='anchorPosition'
                     anchorOrigin={{
-                        vertical: 'bottom',
-                        horizontal: 'center',
+                        vertical: 'center',
+                        horizontal: 'left',
                     }}
                     transformOrigin={{
                         vertical: 'top',
-                        horizontal: 'center',
+                        horizontal: 'right',
                     }}
                 >
                     <Typography>The content of the Popover.</Typography>
