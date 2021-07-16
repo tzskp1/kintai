@@ -229,6 +229,12 @@ export default function Schedule() {
             setData(data);
             return;
         }
+        const t = getToken();
+        if (t && s.username !== decodeJwt(t).user) {
+            alert('他人のシフトは変更できません'); // todo: replace
+            setData(data);
+            return;
+        }
         const ret = await updateSchedule(s.id, s.start_time, s.end_time);
         if (ret) {
             const i = data.findIndex((x) => x.id === s.id);
@@ -314,7 +320,7 @@ export default function Schedule() {
             <div>
                 {sch2boxes(sft).map((b, i, _) => {
                     const [x, y, w, h] = b;
-                    return (<Box width={w} height={h} boxShadow={3} style={{ userSelect: 'none', }} sx={{ zIndex: date2zindex(sft.start_time), bgcolor: "red", position: 'absolute', left: x, top: y, }} onMouseDown={_onDown(i)} onMouseUp={_onUp} >{i === 0 ? sft.username : undefined}</Box>);
+                    return (<Box width={w} height={h} boxShadow={3} style={{ userSelect: 'none', }} sx={{ zIndex: date2zindex(sft.start_time) /* todo: care about end_time */, bgcolor: "red", position: 'absolute', left: x, top: y, }} onMouseDown={_onDown(i)} onMouseUp={_onUp} >{i === 0 ? sft.username : undefined}</Box>);
                 })}
             </div>
         );
