@@ -58,6 +58,7 @@ export type Shift = {
     end_time: Date;
     permitted: boolean;
     username: string;
+    submitted: boolean;
     id: number
 }
 
@@ -76,6 +77,7 @@ export const getSchedules = async () => {
         return ret.map((x: any) => {
             return {
                 ...x,
+                submitted: true,
                 start_time: new Date(x.start_time + 'Z'),
                 end_time: new Date(x.end_time + 'Z')
             }
@@ -119,4 +121,8 @@ export const toDate = (d: Date) => {
     t.setSeconds(0);
     t.setMilliseconds(0);
     return t;
+}
+
+export const timeFormat = (d: Date) => {
+    return `${d.getUTCHours().toString().padStart(2, '0')}:${d.getUTCMinutes().toString().padStart(2, '0')}`;
 }

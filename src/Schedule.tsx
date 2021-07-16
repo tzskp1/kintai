@@ -20,7 +20,7 @@ import TableRow from '@material-ui/core/TableRow';
 import { makeStyles, useTheme, Theme, createStyles } from '@material-ui/core/styles';
 import Box from '@material-ui/core/Box';
 import { sizing, palette, positions } from '@material-ui/system';
-import { getSchedules, seq, Shift, day, updateSchedule, getToken, addDay, toDate } from './Utils';
+import { getSchedules, seq, Shift, day, updateSchedule, getToken, addDay, toDate, timeFormat } from './Utils';
 import { useResizeDetector } from 'react-resize-detector';
 import { useHistory } from 'react-router-dom';
 
@@ -65,7 +65,7 @@ export default function Schedule() {
     const cells = useRef<any[][]>(seq(48).map((_) => seq(7).map((_) => undefined)));
     const anchors = useRef<number[][][]>(seq(49).map((_) => seq(7).map((_) => [-1, -1])));
     const [cw, setCw] = useState(100); // column width
-    const [rh, setRh] = useState(50); // row height
+    const [rh, setRh] = useState(25); // row height
     const drgSense = 15;
     const onResize = useCallback(() => {
         cells.current.forEach((v, i, _) =>
@@ -79,12 +79,12 @@ export default function Schedule() {
                 }
             }));
         let rect = cells.current[0][0].getBoundingClientRect();
+        setCw(rect.width);
+        setRh(rect.height);
         anchors.current[48].forEach((_u, i, _) => {
             anchors.current[48][i][0] = anchors.current[47][i][0] + cw;
             anchors.current[48][i][1] = anchors.current[47][i][1] + rh;
         });
-        setCw(rect.width);
-        setRh(rect.height);
     }, [setCw, setRh, rh, cw]);
     const { ref } = useResizeDetector({ onResize });
     useEffect(onResize, [onResize]);
@@ -245,6 +245,7 @@ export default function Schedule() {
                 <Table>
                     <TableHead>
                         <TableRow>
+                            <TableCell />
                             <TableCell style={{ borderLeft: '1px solid' }} width={cw}>{startDate.getDate()}</TableCell>
                             <TableCell style={{ borderLeft: '1px solid' }} width={cw}>{addDay(startDate, 1).getDate()}</TableCell>
                             <TableCell style={{ borderLeft: '1px solid' }} width={cw}>{addDay(startDate, 2).getDate()}</TableCell>
@@ -257,14 +258,15 @@ export default function Schedule() {
                     <TableBody>
                         {seq(48).map((i) => {
                             return (
-                                <TableRow >
-                                    <TableCell ref={(r) => { cells.current[i][0] = r }} style={{ borderLeft: '1px solid' }} width={cw} />
-                                    <TableCell ref={(r) => { cells.current[i][1] = r }} style={{ borderLeft: '1px solid' }} width={cw} />
-                                    <TableCell ref={(r) => { cells.current[i][2] = r }} style={{ borderLeft: '1px solid' }} width={cw} />
-                                    <TableCell ref={(r) => { cells.current[i][3] = r }} style={{ borderLeft: '1px solid' }} width={cw} />
-                                    <TableCell ref={(r) => { cells.current[i][4] = r }} style={{ borderLeft: '1px solid' }} width={cw} />
-                                    <TableCell ref={(r) => { cells.current[i][5] = r }} style={{ borderLeft: '1px solid' }} width={cw} />
-                                    <TableCell ref={(r) => { cells.current[i][6] = r }} style={{ borderLeft: '1px solid' }} width={cw} />
+                                <TableRow style={{ height: '25px' }}>
+                                    <TableCell style={{ transform: `translateY(${-rh / 2}px)`, padding: "0px 16px" }}>{timeFormat(new Date(index2unixtime(i)))}</TableCell>
+                                    <TableCell ref={(r) => { cells.current[i][0] = r }} style={{ borderLeft: '1px solid', padding: "0px 16px" }} width={cw} />
+                                    <TableCell ref={(r) => { cells.current[i][1] = r }} style={{ borderLeft: '1px solid', padding: "0px 16px" }} width={cw} />
+                                    <TableCell ref={(r) => { cells.current[i][2] = r }} style={{ borderLeft: '1px solid', padding: "0px 16px" }} width={cw} />
+                                    <TableCell ref={(r) => { cells.current[i][3] = r }} style={{ borderLeft: '1px solid', padding: "0px 16px" }} width={cw} />
+                                    <TableCell ref={(r) => { cells.current[i][4] = r }} style={{ borderLeft: '1px solid', padding: "0px 16px" }} width={cw} />
+                                    <TableCell ref={(r) => { cells.current[i][5] = r }} style={{ borderLeft: '1px solid', padding: "0px 16px" }} width={cw} />
+                                    <TableCell ref={(r) => { cells.current[i][6] = r }} style={{ borderLeft: '1px solid', padding: "0px 16px" }} width={cw} />
                                 </TableRow>
                             );
                         })}
