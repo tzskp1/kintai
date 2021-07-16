@@ -18,7 +18,7 @@ use jsonwebtoken::{DecodingKey, EncodingKey, Header, TokenData, Validation};
 use serde::{Deserialize, Serialize};
 use std::env;
 
-use self::models::{NewUser, Schedule, User};
+use self::models::{NewUser, User};
 
 pub fn establish_connection() -> Option<r2d2::Pool<ConnectionManager<PgConnection>>> {
     let _ = dotenv().ok()?;

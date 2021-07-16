@@ -1,6 +1,6 @@
 use actix_files::{Files, NamedFile};
 use actix_web::HttpResponse;
-use actix_web::{dev::HttpResponseBuilder, http, http::header, http::StatusCode};
+use actix_web::{dev::HttpResponseBuilder, http::header, http::StatusCode};
 use actix_web::{error, web, App, HttpRequest, HttpServer, Responder, Result};
 use derive_more::{Display, Error};
 use diesel::RunQueryDsl;
@@ -66,19 +66,10 @@ async fn login_api(
         })
 }
 
-fn auth_without_name(req: &HttpRequest) -> Option<String> {
+fn auth(req: &HttpRequest) -> Option<String> {
     let t = req.headers().get("Authorization")?.to_str().ok()?;
     let t = decode(t)?;
     Some(t.claims.user)
-}
-
-fn auth(req: &HttpRequest, username: &str) -> Option<()> {
-    let name = auth_without_name(req)?;
-    if name == username {
-        Some(())
-    } else {
-        None
-    }
 }
 
 async fn get_schedules(
@@ -101,7 +92,7 @@ async fn get_schedules(
         .parse::<i64>()
         .map_err(|x| error::ErrorBadRequest(format!("cannot parse limit: {}", x)))?;
 
-    let _ = auth_without_name(&req).ok_or(error::ErrorUnauthorized("unauthorized error"))?;
+    let _ = auth(&req).ok_or(error::ErrorUnauthorized("unauthorized error"))?;
     conn.get()
         .ok()
         .ok_or(error::Error::from(MyError::InternalError))
@@ -127,7 +118,7 @@ async fn update_schedule(
     use diesel::QueryDsl;
     use schema::schedules;
 
-    let user = auth_without_name(&req).ok_or(error::ErrorUnauthorized("unauthorized error"))?;
+    let user = auth(&req).ok_or(error::ErrorUnauthorized("unauthorized error"))?;
     conn.get()
         .ok()
         .ok_or(error::Error::from(MyError::InternalError))
@@ -154,9 +145,8 @@ async fn add_schedule(
     conn: web::Data<r2d2::Pool<ConnectionManager<PgConnection>>>,
 ) -> Result<HttpResponse, error::Error> {
     use diesel::ExpressionMethods;
-    use diesel::QueryDsl;
     use schema::schedules;
-    let user = auth_without_name(&req).ok_or(error::ErrorUnauthorized("unauthorized error"))?;
+    let user = auth(&req).ok_or(error::ErrorUnauthorized("unauthorized error"))?;
     conn.get()
         .ok()
         .ok_or(error::Error::from(MyError::InternalError))
