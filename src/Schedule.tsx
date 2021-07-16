@@ -97,19 +97,92 @@ export default function Schedule() {
             if (schs) setData(schs);
         })();
     }, [history]);
+    const findVacant = (xs: [number, number][]) => {
+        let cur = 0, i;
+        if (xs.length === 0) return 0;
+        for (i = 0; i < xs.length; i++) {
+            if (cur < xs[i][1]) {
+                return cur;
+            } else {
+                cur = xs[i][1] + 1;
+            }
+        }
+        return xs[xs.length - 1][1] + 1;
+    }
+    const insertLane = (s: Shift, ls: [number, number][][][]) => {
+        const st = Math.floor(date2index(s.start_time));
+        const end = Math.floor(date2index(s.end_time));
+        const sx = Math.floor((s.start_time.getTime() - startDate.getTime()) / day);
+        const ex = Math.floor((s.end_time.getTime() - startDate.getTime()) / day);
+
+        let i, j;
+        let xs = ls[st][sx];
+        xs.sort((a, b) => a[1] - b[1]);
+        const l = findVacant(xs);
+        xs.push([s.id, l]);
+        xs.sort((a, b) => a[1] - b[1]);
+        ls[st][sx] = xs;
+        if (s.start_time.getDay() !== s.end_time.getDay()) {
+            for (i = st + 1; i < 48; i++) {
+                ls[i][sx].push([s.id, l]);
+                ls[i][sx].sort((a, b) => a[1] - b[1]);
+            }
+            for (j = sx + 1; j < ex; j++) {
+                for (i = 0; i < 48; i++) {
+                    ls[i][j].push([s.id, l]);
+                    ls[i][j].sort((a, b) => a[1] - b[1]);
+                }
+            }
+            for (i = 0; i < end; i++) {
+                ls[i][ex].push([s.id, l]);
+                ls[i][ex].sort((a, b) => a[1] - b[1]);
+            }
+        } else {
+            for (i = st + 1; i < end; i++) {
+                ls[i][sx].push([s.id, l]);
+                ls[i][sx].sort((a, b) => a[1] - b[1]);
+            }
+        }
+    }
+    const calcLaneArray = (s: Shift[]): [number, number][][][] => {
+        let rest = [...s];
+        let dst: [number, number][][][] = seq(48).map((_) => seq(7).map((_) => []));
+        rest.sort((a, b) => a.start_time.getTime() - b.start_time.getTime());
+        while (rest.length >= 1) {
+            const [y] = rest.splice(0, 1);
+            insertLane(y, dst);
+        }
+        return dst;
+    }
+    const lanes = calcLaneArray(data);
+    const fixBox = (b: [number, number, number, number]): [number, number, number, number] => {
+        const [x, y, w, h] = b;
+        return [x + w / 2, y, w / 2, h];
+    }
     const sch2boxes = (s: Shift): [number, number, number, number][] => {
         const st = date2index(s.start_time);
         const end = date2index(s.end_time);
         const a = anchors.current;
+        const w = 0.9 * cw;
         if (s.start_time.getDay() !== s.end_time.getDay()) {
             const sx = Math.floor((s.start_time.getTime() - startDate.getTime()) / day);
             const ex = Math.floor((s.end_time.getTime() - startDate.getTime()) / day);
+            const ret = lanes[Math.floor(st)][sx].find((x) => x[0] === s.id);
+            let ln = 0;
+            if (ret) ln = ret[1];
+            const fb = (bx: [number, number, number, number]) => {
+                let i;
+                for (i = 0; i < ln; i++) {
+                    bx = fixBox(bx);
+                }
+                return bx;
+            }
             let dst = [];
             if (sx < 7 && 0 <= sx) {
                 const l = a[Math.floor(st)][sx][0] + (a[Math.floor(st) + 1][sx][0] - a[Math.floor(st)][sx][0]) * (st - Math.floor(st));
                 const t = a[Math.floor(st)][sx][1] + (a[Math.floor(st) + 1][sx][1] - a[Math.floor(st)][sx][1]) * (st - Math.floor(st));
                 const b = a[47][sx][1] + rh;
-                dst.push([l, t, cw, b - t]);
+                dst.push(fb([l, t, w, b - t]));
             }
             let i;
             for (i = sx + 1; i < ex; i++) {
@@ -117,27 +190,42 @@ export default function Schedule() {
                     const l = a[0][i][0];
                     const t = a[0][i][1];
                     const b = a[47][i][1] + rh;
-                    dst.push([l, t, cw, b - t]);
+                    dst.push(fb([l, t, w, b - t]));
                 }
             }
             if (ex < 7 && 0 <= ex) {
                 const l = a[0][ex][0];
                 const t = a[0][ex][1];
                 const b = a[Math.floor(end)][ex][1] + (a[Math.floor(end) + 1][ex][1] - a[Math.floor(end)][ex][1]) * (end - Math.floor(end));
-                dst.push([l, t, cw, b - t]);
+                dst.push(fb([l, t, w, b - t]));
             }
             return dst as [number, number, number, number][];
         } else {
             const x = s.start_time.getDay() - startDate.getDay();
+            const ret = lanes[Math.floor(st)][x].find((x) => x[0] === s.id);
+            let ln = 0;
+            if (ret) ln = ret[1];
+            const fb = (bx: [number, number, number, number]) => {
+                let i;
+                for (i = 0; i < ln; i++) {
+                    bx = fixBox(bx);
+                }
+                return bx;
+            }
             if (x < 7 && 0 <= x) {
                 const l = a[Math.floor(st)][x][0] + (a[Math.floor(st) + 1][x][0] - a[Math.floor(st)][x][0]) * (st - Math.floor(st));
                 const t = a[Math.floor(st)][x][1] + (a[Math.floor(st) + 1][x][1] - a[Math.floor(st)][x][1]) * (st - Math.floor(st));
                 const b = a[Math.floor(end)][x][1] + (a[Math.floor(end) + 1][x][1] - a[Math.floor(end)][x][1]) * (end - Math.floor(end));
-                return [[l, t, cw, b - t]];
+                return [fb([l, t, w, b - t])];
             } else {
                 return [];
             }
         }
+    }
+
+    const date2zindex = (d: Date) => {
+        return Math.floor(d.getTime() / (60 * 1000));
+        // return Math.floor((addDay(startDate, 7).getTime() - d.getTime()) / (60 * 1000));
     }
 
     const procXY = useCallback(([[x, ox], [y, oy]]: [[number, number], [number, number]]) => {
@@ -238,7 +326,7 @@ export default function Schedule() {
             <div>
                 {sch2boxes(sft).map((b, i, _) => {
                     const [x, y, w, h] = b;
-                    return (<Box width={w} height={h} sx={{ bgcolor: "red", position: 'absolute', left: x, top: y, }} onMouseDown={_onDown(i)} onMouseUp={_onUp} />);
+                    return (<Box width={w} height={h} boxShadow={3} style={{ userSelect: 'none', }} sx={{ zIndex: date2zindex(sft.start_time), bgcolor: "red", position: 'absolute', left: x, top: y, }} onMouseDown={_onDown(i)} onMouseUp={_onUp} >{i === 0 ? sft.username : undefined}</Box>);
                 })}
             </div>
         );

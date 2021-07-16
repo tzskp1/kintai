@@ -1,5 +1,5 @@
 table! {
-    schedules (start_time) {
+    schedules (id) {
         id -> Int8,
         username -> Varchar,
         start_time -> Timestamptz,
