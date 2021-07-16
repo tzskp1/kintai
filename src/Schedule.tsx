@@ -23,6 +23,7 @@ import { sizing, palette, positions } from '@material-ui/system';
 import { getSchedules, seq, Shift, day, updateSchedule, getToken, addDay, toDate, timeFormat, postSchedule, decodeJwt, iter, id } from './Utils';
 import { useResizeDetector } from 'react-resize-detector';
 import { useHistory } from 'react-router-dom';
+import Popover from '@material-ui/core/Popover';
 
 const useStyles = makeStyles((theme: Theme) =>
     createStyles({
@@ -66,6 +67,7 @@ export default function Schedule() {
     const [cw, setCw] = useState(100); // column width
     const [rh, setRh] = useState(25); // row height
     const drgSense = 15;
+    const moveSense = 3;
     const defaultLength = 60 * 60 * 1000; // 1 hour
     const onResize = useCallback(() => {
         cells.current.forEach((v, i, _) =>
@@ -212,8 +214,13 @@ export default function Schedule() {
         }
     }
 
-    const date2zindex = (d: Date) => {
-        return Math.floor((d.getTime() - startDate.getTime()) / (60 * 1000));
+    const shift2zindex = (s: Shift) => {
+        const st = Math.floor(date2index(s.start_time));
+        const sx = Math.floor((s.start_time.getTime() - startDate.getTime()) / day);
+        const ret = lanes[st][sx].find((x) => x[0] === s.id);
+        let ln = 0;
+        if (ret) ln = ret[1];
+        return ln + 1;
     }
 
     const procXY = useCallback(([[x, ox], [y, oy]]: [[number, number], [number, number]]) => {
@@ -235,13 +242,12 @@ export default function Schedule() {
             setData(data);
             return;
         }
+        const i = data.findIndex((x) => x.id === s.id);
+        let nd = [...data];
+        nd[i] = s;
+        setData(nd);
         const ret = await updateSchedule(s.id, s.start_time, s.end_time);
-        if (ret) {
-            const i = data.findIndex((x) => x.id === s.id);
-            let nd = [...data];
-            nd[i] = s;
-            setData(nd);
-        } else if (!getToken()) {
+        if (!ret && !getToken()) {
             history.push('/login');
         }
     }, [history, data]);
@@ -255,10 +261,22 @@ export default function Schedule() {
         const isUp = useRef(false);
         const ox = useRef(0);
         const oy = useRef(0);
+        const x = useRef(0);
+        const y = useRef(0);
+        const [anchorEl, setAnchorEl] = useState<HTMLDivElement | undefined>(undefined);
         useEffect(() => {
             sch.current = shift;
             setSft(shift);
         }, [shift]);
+
+        const handleClick = (event: React.MouseEvent<HTMLDivElement>) => {
+            setAnchorEl(event.currentTarget);
+        };
+
+        const handleClose = () => {
+            setAnchorEl(undefined);
+        };
+
         const onMove = async (e: any) => {
             if (!isDrg.current && !isRsz.current) return;
             let bd = e.target.ownerDocument.scrollingElement;
@@ -285,19 +303,22 @@ export default function Schedule() {
         const _onUp = async (e: any) => {
             ox.current = 0;
             oy.current = 0;
-            isDrg.current = false;
-            isRsz.current = false;
             let el = e.target.ownerDocument;
             el.removeEventListener('mousemove', onMove, { capture: true });
             el.removeEventListener('mouseup', _onUp, { capture: true });
             if (!isUp.current) {
                 isUp.current = true;
-                await onUp(sch.current);
+                const d = (x.current - e.clientX) ** 2 + (y.current - e.clientY) ** 2;
+                if (d > moveSense || !isDrg.current) await onUp(sch.current);
             }
+            isDrg.current = false;
+            isRsz.current = false;
         };
         const _onDown = (i: number) => async (e: any) => {
             ox.current = e.nativeEvent.offsetX;
             oy.current = e.nativeEvent.offsetY;
+            x.current = e.clientX;
+            y.current = e.clientY;
             sel.current = i;
             isUp.current = false;
             isRsz.current = false;
@@ -316,12 +337,33 @@ export default function Schedule() {
             el.addEventListener('mousemove', onMove, { capture: true });
             await onDown(sch.current);
         };
+
+        const open = Boolean(anchorEl);
+        const id = open ? `multibox-popover${sft.id}` : undefined;
         return (
             <div>
-                {sch2boxes(sft).map((b, i, _) => {
-                    const [x, y, w, h] = b;
-                    return (<Box width={w} height={h} boxShadow={3} style={{ userSelect: 'none', }} sx={{ zIndex: date2zindex(sft.start_time) /* todo: care about end_time */, bgcolor: "red", position: 'absolute', left: x, top: y, }} onMouseDown={_onDown(i)} onMouseUp={_onUp} >{i === 0 ? sft.username : undefined}</Box>);
-                })}
+                <div aria-describedby={id} onDoubleClick={handleClick}>
+                    {sch2boxes(sft).map((b, i, _) => {
+                        const [x, y, w, h] = b;
+                        return (<Box width={w} height={h} boxShadow={3} style={{ userSelect: 'none', }} sx={{ zIndex: shift2zindex(sft), bgcolor: "red", position: 'absolute', left: x, top: y, }} onMouseDown={_onDown(i)} onMouseUp={_onUp}>{i === 0 ? sft.username : undefined}</Box>);
+                    })}
+                </div>
+                <Popover
+                    id={id}
+                    open={open}
+                    anchorEl={anchorEl}
+                    onClose={handleClose}
+                    anchorOrigin={{
+                        vertical: 'bottom',
+                        horizontal: 'center',
+                    }}
+                    transformOrigin={{
+                        vertical: 'top',
+                        horizontal: 'center',
+                    }}
+                >
+                    <Typography>The content of the Popover.</Typography>
+                </Popover>
             </div>
         );
     }
