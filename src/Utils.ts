@@ -135,3 +135,20 @@ export const iter = <T>(f: (_: T) => T, n: number): (_: T) => T => (x: T) => {
 };
 
 export const id = <T>(x: T): T => x;
+
+export const deleteSchedule = async (id: number) => {
+    let token = getToken();
+    if (!token) return undefined;
+    let res = await fetch(`/api/schedules/${id}`, {
+        method: 'DELETE',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': "bearer " + token,
+        }
+    });
+    if (res.ok) {
+        return await res.json();
+    } else {
+        return undefined;
+    }
+};

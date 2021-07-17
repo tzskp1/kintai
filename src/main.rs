@@ -3,6 +3,8 @@ use actix_web::HttpResponse;
 use actix_web::{dev::HttpResponseBuilder, http::header, http::StatusCode};
 use actix_web::{error, web, App, HttpRequest, HttpServer, Responder, Result};
 use derive_more::{Display, Error};
+use diesel::connection::{AnsiTransactionManager, TransactionManager};
+use diesel::query_dsl::methods::FilterDsl;
 use diesel::RunQueryDsl;
 use diesel::{
     pg::PgConnection,
@@ -115,7 +117,6 @@ async fn update_schedule(
     conn: web::Data<r2d2::Pool<ConnectionManager<PgConnection>>>,
 ) -> Result<HttpResponse, error::Error> {
     use diesel::ExpressionMethods;
-    use diesel::QueryDsl;
     use schema::schedules;
 
     let user = auth(&req).ok_or(error::ErrorUnauthorized("unauthorized error"))?;
@@ -146,6 +147,7 @@ async fn add_schedule(
 ) -> Result<HttpResponse, error::Error> {
     use diesel::ExpressionMethods;
     use schema::schedules;
+
     let user = auth(&req).ok_or(error::ErrorUnauthorized("unauthorized error"))?;
     conn.get()
         .ok()
@@ -165,6 +167,55 @@ async fn add_schedule(
         })
 }
 
+async fn delete_schedule(
+    req: HttpRequest,
+    web::Path(id): web::Path<i64>,
+    conn: web::Data<r2d2::Pool<ConnectionManager<PgConnection>>>,
+) -> Result<HttpResponse, error::Error> {
+    use diesel::ExpressionMethods;
+    use schema::schedules;
+    let ansi = AnsiTransactionManager::new();
+
+    let user = auth(&req).ok_or(error::ErrorUnauthorized("unauthorized error"))?;
+    conn.get()
+        .ok()
+        .ok_or(error::Error::from(MyError::InternalError))
+        .and_then(|conn| {
+            let _ = ansi
+                .begin_transaction(&conn)
+                .map_err(|x| error::Error::from(MyError::QueryError(x)))?;
+            let s = schedules::table
+                .filter(schedules::id.eq(id))
+                .filter(schedules::username.eq(user.clone()))
+                .get_result::<Schedule>(&conn)
+                .map_err(|x| error::Error::from(MyError::QueryError(x)))?;
+            if !s.permitted {
+                let ret = diesel::delete(schedules::table.filter(schedules::id.eq(id)))
+                    .execute(&conn)
+                    .map_err(|x| error::Error::from(MyError::QueryError(x)))
+                    .map(|x| HttpResponse::Ok().json(x))?;
+                let _ = ansi
+                    .commit_transaction(&conn)
+                    .map_err(|x| error::Error::from(MyError::QueryError(x)))?;
+                return Ok(ret);
+            } else {
+                let ret = diesel::update(
+                    schedules::table
+                        .filter(schedules::username.eq(user))
+                        .filter(schedules::id.eq(id)),
+                )
+                .set(schedules::absent.eq(true))
+                .execute(&conn)
+                .map_err(|x| error::Error::from(MyError::QueryError(x)))
+                .map(|x| HttpResponse::Ok().json(x))?;
+                let _ = ansi
+                    .commit_transaction(&conn)
+                    .map_err(|x| error::Error::from(MyError::QueryError(x)))?;
+                return Ok(ret);
+            }
+        })
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     std::env::set_var("RUST_LOG", "actix_web=info");
@@ -176,6 +227,7 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
             .route("/api/login", web::post().to(login_api))
+            .service(web::resource("/api/schedules/{id}").route(web::delete().to(delete_schedule)))
             .service(web::resource("/api/schedules/{id}").route(web::post().to(update_schedule)))
             .route("/api/schedules", web::post().to(add_schedule))
             .route("/api/schedules", web::get().to(get_schedules))

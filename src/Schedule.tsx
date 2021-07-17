@@ -4,7 +4,9 @@ import CssBaseline from '@material-ui/core/CssBaseline';
 import Divider from '@material-ui/core/Divider';
 import Hidden from '@material-ui/core/Hidden';
 import IconButton from '@material-ui/core/IconButton';
+import DeleteIcon from '@material-ui/icons/Delete';
 import InboxIcon from '@material-ui/icons/MoveToInbox';
+import CloseIcon from '@material-ui/icons/Close';
 import List from '@material-ui/core/List';
 import ListItem from '@material-ui/core/ListItem';
 import ListItemIcon from '@material-ui/core/ListItemIcon';
@@ -17,13 +19,17 @@ import TableBody from '@material-ui/core/TableBody';
 import TableCell from '@material-ui/core/TableCell';
 import TableHead from '@material-ui/core/TableHead';
 import TableRow from '@material-ui/core/TableRow';
+import Toolbar from '@material-ui/core/Toolbar';
 import { makeStyles, useTheme, Theme, createStyles } from '@material-ui/core/styles';
 import Box from '@material-ui/core/Box';
 import { sizing, palette, positions } from '@material-ui/system';
-import { getSchedules, seq, Shift, day, updateSchedule, getToken, addDay, toDate, timeFormat, postSchedule, decodeJwt, iter, id } from './Utils';
+import { getSchedules, seq, Shift, day, updateSchedule, deleteSchedule, getToken, addDay, toDate, timeFormat, postSchedule, decodeJwt, iter, id } from './Utils';
 import { useResizeDetector } from 'react-resize-detector';
 import { useHistory } from 'react-router-dom';
 import Popover from '@material-ui/core/Popover';
+import Grid from '@material-ui/core/Grid';
+import DateFnsUtils from '@date-io/date-fns';
+import { KeyboardDateTimePicker, MuiPickersUtilsProvider } from '@material-ui/pickers';
 
 const useStyles = makeStyles((theme: Theme) =>
     createStyles({
@@ -54,6 +60,72 @@ const date2index = (d: Date) => {
 
 const index2unixtime = (i: number) => {
     return i * (30 * 60 * 1000);
+}
+
+const findVacant = (xs: [number, number][]) => {
+    let cur = 0, i;
+    if (xs.length === 0) return 0;
+    for (i = 0; i < xs.length; i++) {
+        if (cur < xs[i][1]) {
+            return cur;
+        } else {
+            cur = xs[i][1] + 1;
+        }
+    }
+    return xs[xs.length - 1][1] + 1;
+}
+
+const fixBox = (b: [number, number, number, number]): [number, number, number, number] => {
+    const r = 0.8;
+    const [x, y, w, h] = b;
+    return [x + w * (1 - r), y, w * r, h];
+}
+
+const insertLane = (s: Shift, ls: [number, number][][][], startDate: Date) => {
+    const st = Math.floor(date2index(s.start_time));
+    const end = Math.floor(date2index(s.end_time));
+    const sx = Math.floor((s.start_time.getTime() - startDate.getTime()) / day);
+    const ex = Math.floor((s.end_time.getTime() - startDate.getTime()) / day);
+
+    let i, j;
+    let xs = ls[st][sx];
+    xs.sort((a, b) => a[1] - b[1]);
+    const l = findVacant(xs);
+    xs.push([s.id, l]);
+    xs.sort((a, b) => a[1] - b[1]);
+    ls[st][sx] = xs;
+    if (s.start_time.getDay() !== s.end_time.getDay()) {
+        for (i = st + 1; i < 48; i++) {
+            ls[i][sx].push([s.id, l]);
+            ls[i][sx].sort((a, b) => a[1] - b[1]);
+        }
+        for (j = sx + 1; j < ex; j++) {
+            for (i = 0; i < 48; i++) {
+                ls[i][j].push([s.id, l]);
+                ls[i][j].sort((a, b) => a[1] - b[1]);
+            }
+        }
+        for (i = 0; i < end; i++) {
+            ls[i][ex].push([s.id, l]);
+            ls[i][ex].sort((a, b) => a[1] - b[1]);
+        }
+    } else {
+        for (i = st + 1; i < end; i++) {
+            ls[i][sx].push([s.id, l]);
+            ls[i][sx].sort((a, b) => a[1] - b[1]);
+        }
+    }
+}
+
+const calcLaneArray = (s: Shift[], startDate: Date): [number, number][][][] => {
+    let rest = [...s];
+    let dst: [number, number][][][] = seq(48).map((_) => seq(7).map((_) => []));
+    rest.sort((a, b) => a.start_time.getTime() - b.start_time.getTime());
+    while (rest.length >= 1) {
+        const [y] = rest.splice(0, 1);
+        insertLane(y, dst, startDate);
+    }
+    return dst;
 }
 
 export default function Schedule() {
@@ -99,69 +171,7 @@ export default function Schedule() {
             if (schs) setData(schs);
         })();
     }, [history]);
-    const findVacant = (xs: [number, number][]) => {
-        let cur = 0, i;
-        if (xs.length === 0) return 0;
-        for (i = 0; i < xs.length; i++) {
-            if (cur < xs[i][1]) {
-                return cur;
-            } else {
-                cur = xs[i][1] + 1;
-            }
-        }
-        return xs[xs.length - 1][1] + 1;
-    }
-    const insertLane = (s: Shift, ls: [number, number][][][]) => {
-        const st = Math.floor(date2index(s.start_time));
-        const end = Math.floor(date2index(s.end_time));
-        const sx = Math.floor((s.start_time.getTime() - startDate.getTime()) / day);
-        const ex = Math.floor((s.end_time.getTime() - startDate.getTime()) / day);
-
-        let i, j;
-        let xs = ls[st][sx];
-        xs.sort((a, b) => a[1] - b[1]);
-        const l = findVacant(xs);
-        xs.push([s.id, l]);
-        xs.sort((a, b) => a[1] - b[1]);
-        ls[st][sx] = xs;
-        if (s.start_time.getDay() !== s.end_time.getDay()) {
-            for (i = st + 1; i < 48; i++) {
-                ls[i][sx].push([s.id, l]);
-                ls[i][sx].sort((a, b) => a[1] - b[1]);
-            }
-            for (j = sx + 1; j < ex; j++) {
-                for (i = 0; i < 48; i++) {
-                    ls[i][j].push([s.id, l]);
-                    ls[i][j].sort((a, b) => a[1] - b[1]);
-                }
-            }
-            for (i = 0; i < end; i++) {
-                ls[i][ex].push([s.id, l]);
-                ls[i][ex].sort((a, b) => a[1] - b[1]);
-            }
-        } else {
-            for (i = st + 1; i < end; i++) {
-                ls[i][sx].push([s.id, l]);
-                ls[i][sx].sort((a, b) => a[1] - b[1]);
-            }
-        }
-    }
-    const calcLaneArray = (s: Shift[]): [number, number][][][] => {
-        let rest = [...s];
-        let dst: [number, number][][][] = seq(48).map((_) => seq(7).map((_) => []));
-        rest.sort((a, b) => a.start_time.getTime() - b.start_time.getTime());
-        while (rest.length >= 1) {
-            const [y] = rest.splice(0, 1);
-            insertLane(y, dst);
-        }
-        return dst;
-    }
-    const lanes = calcLaneArray(data);
-    const fixBox = (b: [number, number, number, number]): [number, number, number, number] => {
-        const r = 0.8;
-        const [x, y, w, h] = b;
-        return [x + w * (1 - r), y, w * r, h];
-    }
+    const lanes = calcLaneArray(data, startDate);
     const sch2boxes = (s: Shift, fix = true): [number, number, number, number][] => {
         const st = date2index(s.start_time);
         const end = date2index(s.end_time);
@@ -229,6 +239,14 @@ export default function Schedule() {
         const nx = i * cw + a[0][0][0];
         return [nx, y] as [number, number];
     }, [cw]);
+
+    const onDelete = async (s: Shift) => {
+        setData(data.filter((x) => x.id !== s.id));
+        const ret = await deleteSchedule(s.id);
+        if (!ret && !getToken()) {
+            history.push('/login');
+        }
+    }
 
     const onUp = useCallback(async (s: Shift) => {
         if (s.permitted) {
@@ -340,6 +358,22 @@ export default function Schedule() {
             await onDown(sch.current);
         };
 
+        const stChange = async (start_time: Date | null) => {
+            if (!start_time) return;
+            const s = { ...sft, start_time };
+            await onUp(s);
+        }
+
+        const edChange = async (end_time: Date | null) => {
+            if (!end_time) return;
+            const s = { ...sft, end_time };
+            await onUp(s);
+        }
+
+        const deleteSft = async () => {
+            await onDelete(sch.current);
+        }
+
         const open = Boolean(anchorEl);
         const id = open ? `multibox-popover${sft.id}` : undefined;
         return (
@@ -347,7 +381,7 @@ export default function Schedule() {
                 <div>
                     {sch2boxes(sft).map((b, i, _) => {
                         const [x, y, w, h] = b;
-                        return (<Box aria-describedby={id} width={w} height={h} boxShadow={3} style={{ userSelect: 'none', }} sx={{ zIndex: shift2zindex(sft), bgcolor: "red", position: 'absolute', left: x, top: y, }} onMouseDown={_onDown(i)} onDoubleClick={handleClick(x, y)} onMouseUp={_onUp}>{i === 0 ? sft.username : undefined}</Box>);
+                        return (<Box aria-describedby={id} width={w} height={h} boxShadow={3} style={{ userSelect: 'none', }} sx={{ zIndex: shift2zindex(sft), bgcolor: "red", position: 'absolute', left: x, top: y, }} onMouseDown={_onDown(i)} onDoubleClick={handleClick(x + 0.5 * w, y)} onMouseUp={_onUp}>{i === 0 ? sft.username : undefined}</Box>);
                     })}
                 </div>
                 <Popover
@@ -358,15 +392,29 @@ export default function Schedule() {
                     anchorPosition={{ left: px, top: py }}
                     anchorReference='anchorPosition'
                     anchorOrigin={{
-                        vertical: 'center',
-                        horizontal: 'left',
+                        vertical: 'top',
+                        horizontal: 'center',
                     }}
                     transformOrigin={{
                         vertical: 'top',
                         horizontal: 'right',
                     }}
                 >
-                    <Typography>The content of the Popover.</Typography>
+                    <Toolbar style={{ justifyContent: "flex-end" }}>
+                        <IconButton color="inherit" onClick={deleteSft}>
+                            <DeleteIcon />
+                        </IconButton>
+                        <IconButton color="inherit" onClick={handleClose}>
+                            <CloseIcon />
+                        </IconButton>
+                    </Toolbar>
+                    <MuiPickersUtilsProvider utils={DateFnsUtils}>
+                        <Grid container justifyContent="space-around">
+                            <KeyboardDateTimePicker value={sft.start_time} onChange={stChange} />
+                            <KeyboardDateTimePicker value={sft.end_time} onChange={edChange} />
+                        </Grid>
+                    </MuiPickersUtilsProvider>
+                    <Typography>{sft.username}</Typography>
                 </Popover>
             </div>
         );
