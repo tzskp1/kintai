@@ -249,13 +249,13 @@ export default function Schedule() {
     const onUp = useCallback(async (s: Shift) => {
         if (s.permitted) {
             alert('許可されたシフトは変更できません'); // todo: replace
-            setData(data);
+            setData([...data]);
             return;
         }
         const t = getToken();
         if (t && s.username !== decodeJwt(t).user) {
             alert('他人のシフトは変更できません'); // todo: replace
-            setData(data);
+            setData([...data]);
             return;
         }
         const i = data.findIndex((x) => x.id === s.id);
