@@ -85,7 +85,7 @@ const insertLane = (s: Shift, ls: [number, number][][][], startDate: Date) => {
     const st = Math.floor(date2index(s.start_time));
     const end = Math.floor(date2index(s.end_time));
     const sx = Math.floor((s.start_time.getTime() - startDate.getTime()) / day);
-    const ex = Math.floor((s.end_time.getTime() - startDate.getTime()) / day);
+    const ex = Math.min(Math.floor((s.end_time.getTime() - startDate.getTime()) / day), 6);
 
     let i, j;
     let xs = ls[st][sx];

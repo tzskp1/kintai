@@ -227,8 +227,11 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
             .route("/api/login", web::post().to(login_api))
-            .service(web::resource("/api/schedules/{id}").route(web::delete().to(delete_schedule)))
-            .service(web::resource("/api/schedules/{id}").route(web::post().to(update_schedule)))
+            .service(
+                web::resource("/api/schedules/{id}")
+                    .route(web::delete().to(delete_schedule))
+                    .route(web::patch().to(update_schedule)),
+            )
             .route("/api/schedules", web::post().to(add_schedule))
             .route("/api/schedules", web::get().to(get_schedules))
             .route("/", web::get().to(index))

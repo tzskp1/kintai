@@ -92,7 +92,7 @@ export const updateSchedule = async (id: number, startTime: Date, endTime: Date)
     let token = getToken();
     if (!token) return undefined;
     let res = await fetch(`/api/schedules/${id}`, {
-        method: 'POST',
+        method: 'PATCH',
         headers: {
             'Content-Type': 'application/json',
             'Authorization': "bearer " + token,
