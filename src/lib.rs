@@ -4,10 +4,12 @@ pub mod schema;
 extern crate diesel;
 extern crate bcrypt;
 extern crate dotenv;
+extern crate passwords;
 extern crate qstring;
 
 use bcrypt::{hash, verify, BcryptError, DEFAULT_COST};
 use chrono::Utc;
+use derive_more::{Display, Error};
 use diesel::prelude::*;
 use diesel::{
     pg::PgConnection,
@@ -27,10 +29,17 @@ pub fn establish_connection() -> Option<r2d2::Pool<ConnectionManager<PgConnectio
     r2d2::Pool::builder().build(manager).ok()
 }
 
-#[derive(Debug)]
+#[derive(Debug, Display, Error)]
 pub enum CreateUserError {
     HashError(BcryptError),
     QueryError(diesel::result::Error),
+}
+
+#[derive(Debug, Display, Error)]
+pub enum UpdatePasswordError {
+    HashError(BcryptError),
+    QueryError(diesel::result::Error),
+    AuthenticationError,
 }
 
 pub fn create_user<'a>(
@@ -126,4 +135,20 @@ pub fn decode(h: &str) -> Option<TokenData<UserToken>> {
     } else {
         None
     }
+}
+
+pub fn update_password<'a>(
+    conn: &PgConnection,
+    id: &'a str,
+    old: &'a str,
+    pass: &'a str,
+) -> Result<usize, UpdatePasswordError> {
+    use schema::users;
+    let _ = validate_user(conn, id, old).ok_or(UpdatePasswordError::AuthenticationError);
+    let hashed = hash(pass, DEFAULT_COST).map_err(|x| UpdatePasswordError::HashError(x))?;
+
+    diesel::update(users::table.filter(users::id.eq(id)))
+        .set(users::pass.eq(hashed))
+        .execute(conn)
+        .map_err(|x| UpdatePasswordError::QueryError(x))
 }

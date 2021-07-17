@@ -10,10 +10,14 @@ use diesel::{
     pg::PgConnection,
     r2d2::{self, ConnectionManager},
 };
-use kintai::models::Schedule;
-use kintai::{decode, establish_connection, get_user, login, schema};
+use kintai::models::{Schedule, User};
+use kintai::{
+    create_user, decode, establish_connection, get_user, login, schema, CreateUserError,
+    UpdatePasswordError,
+};
+use passwords::PasswordGenerator;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json::{json, Value};
 use std::env;
 
 async fn index(_: HttpRequest) -> Result<NamedFile> {
@@ -24,6 +28,18 @@ async fn index(_: HttpRequest) -> Result<NamedFile> {
 pub struct UserPass {
     pub id: String,
     pub pass: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UserName {
+    pub id: String,
+    pub isadmin: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Passwords {
+    pub new: String,
+    pub old: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -44,6 +60,8 @@ enum MyError {
     #[display(fmt = "internal error")]
     InternalError,
     QueryError(diesel::result::Error),
+    CreateUserError(CreateUserError),
+    UpdatePasswordError(UpdatePasswordError),
 }
 
 impl error::ResponseError for MyError {
@@ -57,6 +75,8 @@ impl error::ResponseError for MyError {
         match *self {
             MyError::InternalError => StatusCode::INTERNAL_SERVER_ERROR,
             MyError::QueryError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            MyError::CreateUserError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            MyError::UpdatePasswordError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
@@ -114,6 +134,104 @@ async fn get_schedules(
                 .get_results::<Schedule>(&conn)
                 .map_err(|x| error::Error::from(MyError::QueryError(x)))
                 .map(|x| HttpResponse::Ok().json(x))
+        })
+}
+
+async fn get_users(
+    req: HttpRequest,
+    conn: web::Data<r2d2::Pool<ConnectionManager<PgConnection>>>,
+) -> Result<HttpResponse, error::Error> {
+    use schema::users;
+
+    let user = auth(&req).ok_or(error::ErrorUnauthorized("unauthorized error"))?;
+    conn.get()
+        .ok()
+        .ok_or(error::Error::from(MyError::InternalError))
+        .and_then(|conn| {
+            let u = get_user(&conn, &user).ok_or(error::Error::from(MyError::InternalError))?;
+            if !u.isadmin {
+                Err(error::ErrorForbidden("method is allowed for only admin"))
+            } else {
+                users::table
+                    .get_results::<User>(&conn)
+                    .map_err(|x| error::Error::from(MyError::QueryError(x)))
+                    .map(|x| {
+                        HttpResponse::Ok().json(
+                            x.iter()
+                                .map(|u| json!({"id": u.id, "isadmin": u.isadmin}))
+                                .collect::<Value>(),
+                        )
+                    })
+            }
+        })
+}
+
+async fn add_user(
+    req: HttpRequest,
+    nu: web::Json<UserName>,
+    conn: web::Data<r2d2::Pool<ConnectionManager<PgConnection>>>,
+    pg: web::Data<PasswordGenerator>,
+) -> Result<HttpResponse, error::Error> {
+    let user = auth(&req).ok_or(error::ErrorUnauthorized("unauthorized error"))?;
+    conn.get()
+        .ok()
+        .ok_or(error::Error::from(MyError::InternalError))
+        .and_then(|conn| {
+            let u = get_user(&conn, &user).ok_or(error::Error::from(MyError::InternalError))?;
+            if !u.isadmin {
+                Err(error::ErrorForbidden("method is allowed for only admin"))
+            } else {
+                let np = pg
+                    .generate_one()
+                    .map_err(|_| error::Error::from(MyError::InternalError))?;
+                create_user(&conn, &nu.id, &np, &nu.isadmin)
+                    .map_err(|x| error::Error::from(MyError::CreateUserError(x)))
+                    .map(|u| {
+                        HttpResponse::Ok()
+                            .json(json!({"id": u.id, "isadmin": u.isadmin, "pass": np}))
+                    })
+            }
+        })
+}
+
+async fn update_password(
+    req: HttpRequest,
+    p: web::Json<Passwords>,
+    conn: web::Data<r2d2::Pool<ConnectionManager<PgConnection>>>,
+) -> Result<HttpResponse, error::Error> {
+    let user = auth(&req).ok_or(error::ErrorUnauthorized("unauthorized error"))?;
+    conn.get()
+        .ok()
+        .ok_or(error::Error::from(MyError::InternalError))
+        .and_then(|conn| {
+            kintai::update_password(&conn, &user, &p.old, &p.new)
+                .map_err(|x| error::Error::from(MyError::UpdatePasswordError(x)))
+                .map(|x| HttpResponse::Ok().json(x))
+        })
+}
+
+async fn delete_user(
+    req: HttpRequest,
+    web::Path(id): web::Path<String>,
+    conn: web::Data<r2d2::Pool<ConnectionManager<PgConnection>>>,
+) -> Result<HttpResponse, error::Error> {
+    use diesel::ExpressionMethods;
+    use schema::users;
+
+    let user = auth(&req).ok_or(error::ErrorUnauthorized("unauthorized error"))?;
+    conn.get()
+        .ok()
+        .ok_or(error::Error::from(MyError::InternalError))
+        .and_then(|conn| {
+            let u = get_user(&conn, &user).ok_or(error::Error::from(MyError::InternalError))?;
+            if !u.isadmin {
+                Err(error::ErrorForbidden("method is allowed for only admin"))
+            } else {
+                diesel::delete(users::table.filter(users::id.eq(id)))
+                    .execute(&conn)
+                    .map_err(|x| error::Error::from(MyError::QueryError(x)))
+                    .map(|x| HttpResponse::Ok().json(x))
+            }
         })
 }
 
@@ -230,6 +348,16 @@ async fn main() -> std::io::Result<()> {
         .parse()
         .expect("PORT must be a number");
     let pool = establish_connection().unwrap();
+    let pg = PasswordGenerator {
+        length: 12,
+        numbers: true,
+        lowercase_letters: true,
+        uppercase_letters: true,
+        symbols: true,
+        spaces: false,
+        exclude_similar_characters: true,
+        strict: true,
+    };
     HttpServer::new(move || {
         App::new()
             .route("/api/login", web::post().to(login_api))
@@ -240,9 +368,14 @@ async fn main() -> std::io::Result<()> {
             )
             .route("/api/schedules", web::post().to(add_schedule))
             .route("/api/schedules", web::get().to(get_schedules))
+            .route("/api/users", web::post().to(add_user))
+            .route("/api/users", web::get().to(get_users))
+            .route("/api/users/me/password", web::patch().to(update_password))
+            .service(web::resource("/api/users/{id}").route(web::delete().to(delete_user)))
             .route("/", web::get().to(index))
             .service(Files::new("/", "./build").prefer_utf8(true))
             .data(pool.clone())
+            .data(pg.clone())
     })
     .bind(("0.0.0.0", port))?
     .run()
