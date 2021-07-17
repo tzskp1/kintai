@@ -33,25 +33,23 @@ import { KeyboardDateTimePicker, MuiPickersUtilsProvider } from '@material-ui/pi
 
 const useStyles = makeStyles((theme: Theme) =>
     createStyles({
-        rowOverlayHover: {
-            width: '0',
-            padding: '0 !important',
+        tableHead: {
+            userSelect: 'none',
+            borderLeft: '1px solid'
         },
-        overlayWrapper: {
-            position: 'relative',
+        tableCell: {
+            borderLeft: '1px solid',
+            padding: "0px 16px"
         },
-        overlayContent: {
-            visibility: 'hidden',
-            position: 'absolute',
-            right: '0',
+        tableTime: {
+            userSelect: 'none',
+            padding: "0px 16px"
+        },
+        tableRow: {
+            height: '25px'
         },
     }),
 );
-
-type MultiBoxProp = {
-    onDown?: (_: Shift) => Promise<void>,
-    shift: Shift
-}
 
 const date2index = (d: Date) => {
     let t = d.getTime() - toDate(d).getTime();
@@ -240,13 +238,13 @@ export default function Schedule() {
         return [nx, y] as [number, number];
     }, [cw]);
 
-    const onDelete = async (s: Shift) => {
+    const onDelete = useCallback(async (s: Shift) => {
         setData(data.filter((x) => x.id !== s.id));
         const ret = await deleteSchedule(s.id);
         if (!ret && !getToken()) {
             history.push('/login');
         }
-    }
+    }, [data, history]);
 
     const onUp = useCallback(async (s: Shift) => {
         if (s.permitted) {
@@ -270,7 +268,7 @@ export default function Schedule() {
         }
     }, [history, data]);
 
-    const MultiBox = ({ shift, onDown = (x) => { return new Promise(() => { return; }); } }: MultiBoxProp) => {
+    const MultiBox = ({ shift }: { shift: Shift }) => {
         const [sft, setSft] = useState(shift);
         const sch = useRef(shift);
         const sel = useRef(0);
@@ -355,7 +353,6 @@ export default function Schedule() {
             let el = e.target.ownerDocument;
             el.addEventListener('mouseup', _onUp, { capture: true });
             el.addEventListener('mousemove', onMove, { capture: true });
-            await onDown(sch.current);
         };
 
         const stChange = async (start_time: Date | null) => {
@@ -429,8 +426,10 @@ export default function Schedule() {
             let nd = [...data];
             nd.push({ start_time, end_time, id, permitted: false, absent: false, username: decodeJwt(t).user })
             setData(nd);
+        } else {
+            history.push('/login');
         }
-    }, [startDate, defaultLength, data]);
+    }, [startDate, defaultLength, data, history]);
 
     return (
         <>
@@ -439,27 +438,27 @@ export default function Schedule() {
                     <TableHead>
                         <TableRow>
                             <TableCell />
-                            <TableCell style={{ userSelect: 'none', borderLeft: '1px solid' }} width={cw}>{startDate.getDate()}</TableCell>
-                            <TableCell style={{ userSelect: 'none', borderLeft: '1px solid' }} width={cw}>{addDay(startDate, 1).getDate()}</TableCell>
-                            <TableCell style={{ userSelect: 'none', borderLeft: '1px solid' }} width={cw}>{addDay(startDate, 2).getDate()}</TableCell>
-                            <TableCell style={{ userSelect: 'none', borderLeft: '1px solid' }} width={cw}>{addDay(startDate, 3).getDate()}</TableCell>
-                            <TableCell style={{ userSelect: 'none', borderLeft: '1px solid' }} width={cw}>{addDay(startDate, 4).getDate()}</TableCell>
-                            <TableCell style={{ userSelect: 'none', borderLeft: '1px solid' }} width={cw}>{addDay(startDate, 5).getDate()}</TableCell>
-                            <TableCell style={{ userSelect: 'none', borderLeft: '1px solid' }} width={cw}>{addDay(startDate, 6).getDate()}</TableCell>
+                            <TableCell className={classes.tableHead} width={cw}>{startDate.getDate()}</TableCell>
+                            <TableCell className={classes.tableHead} width={cw}>{addDay(startDate, 1).getDate()}</TableCell>
+                            <TableCell className={classes.tableHead} width={cw}>{addDay(startDate, 2).getDate()}</TableCell>
+                            <TableCell className={classes.tableHead} width={cw}>{addDay(startDate, 3).getDate()}</TableCell>
+                            <TableCell className={classes.tableHead} width={cw}>{addDay(startDate, 4).getDate()}</TableCell>
+                            <TableCell className={classes.tableHead} width={cw}>{addDay(startDate, 5).getDate()}</TableCell>
+                            <TableCell className={classes.tableHead} width={cw}>{addDay(startDate, 6).getDate()}</TableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>
                         {seq(48).map((i) => {
                             return (
-                                <TableRow style={{ height: '25px' }}>
-                                    <TableCell style={{ userSelect: 'none', transform: `translateY(${-rh / 2}px)`, padding: "0px 16px" }}>{timeFormat(new Date(index2unixtime(i)))}</TableCell>
-                                    <TableCell ref={(r) => { cells.current[i][0] = r }} style={{ borderLeft: '1px solid', padding: "0px 16px" }} width={cw} onClick={onClickCell(i, 0)} />
-                                    <TableCell ref={(r) => { cells.current[i][1] = r }} style={{ borderLeft: '1px solid', padding: "0px 16px" }} width={cw} onClick={onClickCell(i, 1)} />
-                                    <TableCell ref={(r) => { cells.current[i][2] = r }} style={{ borderLeft: '1px solid', padding: "0px 16px" }} width={cw} onClick={onClickCell(i, 2)} />
-                                    <TableCell ref={(r) => { cells.current[i][3] = r }} style={{ borderLeft: '1px solid', padding: "0px 16px" }} width={cw} onClick={onClickCell(i, 3)} />
-                                    <TableCell ref={(r) => { cells.current[i][4] = r }} style={{ borderLeft: '1px solid', padding: "0px 16px" }} width={cw} onClick={onClickCell(i, 4)} />
-                                    <TableCell ref={(r) => { cells.current[i][5] = r }} style={{ borderLeft: '1px solid', padding: "0px 16px" }} width={cw} onClick={onClickCell(i, 5)} />
-                                    <TableCell ref={(r) => { cells.current[i][6] = r }} style={{ borderLeft: '1px solid', padding: "0px 16px" }} width={cw} onClick={onClickCell(i, 6)} />
+                                <TableRow className={classes.tableRow}>
+                                    <TableCell className={classes.tableTime} style={{ transform: `translateY(${-rh / 2}px)` }}>{timeFormat(new Date(index2unixtime(i)))}</TableCell>
+                                    <TableCell ref={(r) => { cells.current[i][0] = r }} className={classes.tableCell} width={cw} onClick={onClickCell(i, 0)} />
+                                    <TableCell ref={(r) => { cells.current[i][1] = r }} className={classes.tableCell} width={cw} onClick={onClickCell(i, 1)} />
+                                    <TableCell ref={(r) => { cells.current[i][2] = r }} className={classes.tableCell} width={cw} onClick={onClickCell(i, 2)} />
+                                    <TableCell ref={(r) => { cells.current[i][3] = r }} className={classes.tableCell} width={cw} onClick={onClickCell(i, 3)} />
+                                    <TableCell ref={(r) => { cells.current[i][4] = r }} className={classes.tableCell} width={cw} onClick={onClickCell(i, 4)} />
+                                    <TableCell ref={(r) => { cells.current[i][5] = r }} className={classes.tableCell} width={cw} onClick={onClickCell(i, 5)} />
+                                    <TableCell ref={(r) => { cells.current[i][6] = r }} className={classes.tableCell} width={cw} onClick={onClickCell(i, 6)} />
                                 </TableRow>
                             );
                         })}
