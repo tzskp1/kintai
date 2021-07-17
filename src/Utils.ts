@@ -65,10 +65,12 @@ export type Shift = {
     id: number;
 }
 
-export const getSchedules = async () => {
+export const getSchedules = async (start: Date, end: Date) => {
     let token = getToken();
     if (!token) return undefined;
-    let res = await fetch("/api/schedules", {
+    const st = start.toISOString().split("T")[0];
+    const ed = end.toISOString().split("T")[0];
+    let res = await fetch(`/api/schedules?start=${st}&end=${ed}`, {
         method: 'GET',
         headers: {
             'Content-Type': 'application/json',

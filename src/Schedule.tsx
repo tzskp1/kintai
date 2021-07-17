@@ -80,9 +80,9 @@ const fixBox = (b: [number, number, number, number]): [number, number, number, n
 }
 
 const insertLane = (s: Shift, ls: [number, number][][][], startDate: Date) => {
-    const st = Math.floor(date2index(s.start_time));
-    const end = Math.floor(date2index(s.end_time));
-    const sx = Math.floor((s.start_time.getTime() - startDate.getTime()) / day);
+    const st = Math.max(Math.floor(date2index(s.start_time)), 0);
+    const end = Math.min(Math.floor(date2index(s.end_time)), 47);
+    const sx = Math.max(Math.floor((s.start_time.getTime() - startDate.getTime()) / day), 0);
     const ex = Math.min(Math.floor((s.end_time.getTime() - startDate.getTime()) / day), 6);
 
     let i, j;
@@ -165,10 +165,11 @@ export default function Schedule() {
             if (!getToken()) {
                 history.push('/login');
             }
-            let schs = await getSchedules();
+            const endDate = addDay(startDate, 7);
+            const schs = await getSchedules(startDate, endDate);
             if (schs) setData(schs);
         })();
-    }, [history]);
+    }, [history, startDate]);
     const lanes = calcLaneArray(data, startDate);
     const sch2boxes = (s: Shift, fix = true): [number, number, number, number][] => {
         const st = date2index(s.start_time);
@@ -176,8 +177,8 @@ export default function Schedule() {
         const a = anchors.current;
         const w = 0.9 * cw;
         if (s.start_time.getDay() !== s.end_time.getDay()) {
-            const sx = Math.floor((s.start_time.getTime() - startDate.getTime()) / day);
-            const ex = Math.floor((s.end_time.getTime() - startDate.getTime()) / day);
+            const sx = Math.max(Math.floor((s.start_time.getTime() - startDate.getTime()) / day), 0);
+            const ex = Math.min(Math.floor((s.end_time.getTime() - startDate.getTime()) / day), 6);
             const ret = lanes[Math.floor(st)][sx].find((x) => x[0] === s.id);
             let ln = 0;
             if (ret) ln = ret[1];
@@ -206,7 +207,7 @@ export default function Schedule() {
             }
             return dst as [number, number, number, number][];
         } else {
-            const x = Math.floor((s.start_time.getTime() - startDate.getTime()) / day);
+            const x = Math.max(Math.floor((s.start_time.getTime() - startDate.getTime()) / day), 0);
             const ret = lanes[Math.floor(st)][x].find((x) => x[0] === s.id);
             let ln = 0;
             if (ret) ln = ret[1];
@@ -224,7 +225,7 @@ export default function Schedule() {
 
     const shift2zindex = (s: Shift) => {
         const st = Math.floor(date2index(s.start_time));
-        const sx = Math.floor((s.start_time.getTime() - startDate.getTime()) / day);
+        const sx = Math.max(Math.floor((s.start_time.getTime() - startDate.getTime()) / day), 0);
         const ret = lanes[st][sx].find((x) => x[0] === s.id);
         let ln = 0;
         if (ret) ln = ret[1];

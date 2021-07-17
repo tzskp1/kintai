@@ -43,7 +43,7 @@ export default function SignIn({ }) {
     const [pass, setPass] = useState('');
     useEffect(() => {
         if (getToken()) {
-            history.push('/employee');
+            history.push('/schedules');
         }
     }, [history]);
 
@@ -91,7 +91,7 @@ export default function SignIn({ }) {
                         onClick={async () => {
                             let t = await login(email, pass);
                             localStorage.setItem('token', t);
-                            history.push('/employee');
+                            history.push('/schedules');
                         }}
                     >
                         ログイン

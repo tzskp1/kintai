@@ -4,15 +4,45 @@ import Schedule from './Schedule';
 import Login from './Login';
 import reportWebVitals from './reportWebVitals';
 import { BrowserRouter, Route, Switch, Redirect } from "react-router-dom";
+import { createTheme } from "@material-ui/core/styles";
+import { ThemeProvider } from "@material-ui/styles";
+import * as colors from "@material-ui/core/colors";
+
+const theme = createTheme({
+    typography: {
+        fontFamily: [
+            "Noto Sans JP",
+            "Lato",
+            "游ゴシック Medium",
+            "游ゴシック体",
+            "Yu Gothic Medium",
+            "YuGothic",
+            "ヒラギノ角ゴ ProN",
+            "Hiragino Kaku Gothic ProN",
+            "メイリオ",
+            "Meiryo",
+            "ＭＳ Ｐゴシック",
+            "MS PGothic",
+            "sans-serif",
+        ].join(","),
+    },
+    palette: {
+        primary: { main: colors.blue[800] },
+    },
+});
 
 ReactDOM.render(
-    <BrowserRouter>
-        <Switch>
-            <Route path="/employee" component={Schedule} />
-            <Route path="/login" component={Login} />
-            <Redirect from="/" to="/login" />
-        </Switch>
-    </BrowserRouter>,
+    <ThemeProvider theme={theme}>
+        <BrowserRouter>
+            <Switch>
+                <Route path="/schedules" component={Schedule} />
+                <Route path="/users" component={Schedule} />
+                <Route path="/admin" component={Schedule} />
+                <Route path="/login" component={Login} />
+                <Redirect from="/" to="/login" />
+            </Switch>
+        </BrowserRouter>
+    </ThemeProvider>,
     document.getElementById('root')
 );
 

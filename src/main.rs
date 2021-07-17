@@ -2,6 +2,8 @@ use actix_files::{Files, NamedFile};
 use actix_web::HttpResponse;
 use actix_web::{dev::HttpResponseBuilder, http::header, http::StatusCode};
 use actix_web::{error, web, App, HttpRequest, HttpServer, Responder, Result};
+use chrono::prelude::*;
+use chrono::{Duration, NaiveDate};
 use derive_more::{Display, Error};
 use diesel::connection::{AnsiTransactionManager, TransactionManager};
 use diesel::query_dsl::methods::FilterDsl;
@@ -105,32 +107,40 @@ async fn get_schedules(
     req: HttpRequest,
     conn: web::Data<r2d2::Pool<ConnectionManager<PgConnection>>>,
 ) -> Result<HttpResponse, error::Error> {
+    use diesel::query_dsl::methods::OrderDsl;
     use diesel::ExpressionMethods;
-    use diesel::QueryDsl;
     use qstring::QString;
     use schema::schedules;
-    let qs = QString::from(req.query_string());
-    let offset = qs
-        .get("offset")
-        .unwrap_or_else(|| "0")
-        .parse::<i64>()
-        .map_err(|x| error::ErrorBadRequest(format!("cannot parse offset: {}", x)))?;
-    let limit = qs
-        .get("limit")
-        .unwrap_or_else(|| "1000")
-        .parse::<i64>()
-        .map_err(|x| error::ErrorBadRequest(format!("cannot parse limit: {}", x)))?;
 
     let _ = auth(&req).ok_or(error::ErrorUnauthorized("unauthorized error"))?;
+    let qs = QString::from(req.query_string());
+    let today = Local::now().naive_local().date();
+    let start_date = today
+        .checked_sub_signed(Duration::days(
+            today.weekday().num_days_from_sunday().into(),
+        ))
+        .ok_or(error::Error::from(MyError::InternalError))?;
+    let end_date = start_date
+        .checked_add_signed(Duration::days(7))
+        .ok_or(error::Error::from(MyError::InternalError))?;
+    let start = qs
+        .get("start")
+        .map(|x| NaiveDate::parse_from_str(x, "%Y-%m-%d"))
+        .unwrap_or_else(|| Ok(start_date))
+        .map_err(|x| error::ErrorBadRequest(format!("cannot parse start: {}", x)))?;
+    let end = qs
+        .get("end")
+        .map(|x| NaiveDate::parse_from_str(x, "%Y-%m-%d"))
+        .unwrap_or_else(|| Ok(end_date))
+        .map_err(|x| error::ErrorBadRequest(format!("cannot parse end: {}", x)))?;
     conn.get()
         .ok()
         .ok_or(error::Error::from(MyError::InternalError))
         .and_then(|conn| {
             schedules::table
-                // .filter(schedules::username.eq(user))
                 .order(schedules::start_time.desc())
-                .offset(offset)
-                .limit(limit)
+                .filter(schedules::end_time.gt(start.and_hms(0, 0, 0)))
+                .filter(schedules::start_time.lt(end.and_hms(0, 0, 0)))
                 .get_results::<Schedule>(&conn)
                 .map_err(|x| error::Error::from(MyError::QueryError(x)))
                 .map(|x| HttpResponse::Ok().json(x))
@@ -227,10 +237,17 @@ async fn delete_user(
             if !u.isadmin {
                 Err(error::ErrorForbidden("method is allowed for only admin"))
             } else {
-                diesel::delete(users::table.filter(users::id.eq(id)))
-                    .execute(&conn)
-                    .map_err(|x| error::Error::from(MyError::QueryError(x)))
-                    .map(|x| HttpResponse::Ok().json(x))
+                let t = get_user(&conn, &id).ok_or(error::Error::from(MyError::InternalError))?;
+                if !t.isadmin || id == user {
+                    diesel::delete(users::table.filter(users::id.eq(id)))
+                        .execute(&conn)
+                        .map_err(|x| error::Error::from(MyError::QueryError(x)))
+                        .map(|x| HttpResponse::Ok().json(x))
+                } else {
+                    Err(error::ErrorForbidden(
+                        "can not remove admin account except own",
+                    ))
+                }
             }
         })
 }
