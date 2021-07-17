@@ -6,7 +6,10 @@ CREATE TABLE schedules (
   end_time TIMESTAMP WITH TIME ZONE NOT NULL,
   permitted BOOLEAN NOT NULL DEFAULT 'f',
   absent BOOLEAN NOT NULL DEFAULT 'f',
+  enable BOOLEAN NOT NULL DEFAULT 't',
+  created_by VARCHAR NOT NULL,
   FOREIGN KEY (username) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
   CHECK (end_time > start_time),
   CHECK (permitted OR NOT absent)
 )

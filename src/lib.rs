@@ -103,6 +103,11 @@ pub fn validate_user(conn: &PgConnection, username: &str, password: &str) -> Opt
         })
 }
 
+pub fn get_user(conn: &PgConnection, username: &str) -> Option<User> {
+    use schema::users::dsl::*;
+    users.filter(id.eq(username)).get_result::<User>(conn).ok()
+}
+
 pub fn login(conn: &PgConnection, username: &str, password: &str) -> Option<String> {
     validate_user(conn, username, password).and_then(|x| generate_token(&x.id, &x.isadmin))
 }

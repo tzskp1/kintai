@@ -27,4 +27,6 @@ pub struct Schedule {
     pub end_time: chrono::NaiveDateTime,
     pub permitted: bool,
     pub absent: bool,
+    pub enable: bool,
+    pub created_by: String,
 }

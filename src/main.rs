@@ -11,7 +11,7 @@ use diesel::{
     r2d2::{self, ConnectionManager},
 };
 use kintai::models::Schedule;
-use kintai::{decode, establish_connection, login, schema};
+use kintai::{decode, establish_connection, get_user, login, schema};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::env;
@@ -28,6 +28,13 @@ pub struct UserPass {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StartEnd {
+    pub start_time: chrono::NaiveDateTime,
+    pub end_time: chrono::NaiveDateTime,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct StartEndWithUser {
+    pub username: String,
     pub start_time: chrono::NaiveDateTime,
     pub end_time: chrono::NaiveDateTime,
 }
@@ -126,9 +133,10 @@ async fn update_schedule(
         .and_then(|conn| {
             diesel::update(
                 schedules::table
-                    .filter(schedules::username.eq(user))
+                    .filter(schedules::created_by.eq(user))
                     .filter(schedules::id.eq(id))
-                    .filter(schedules::permitted.eq(false)),
+                    .filter(schedules::permitted.eq(false))
+                    .filter(schedules::enable.eq(true)),
             )
             .set((
                 schedules::start_time.eq(se.start_time),
@@ -142,7 +150,7 @@ async fn update_schedule(
 
 async fn add_schedule(
     req: HttpRequest,
-    se: web::Json<StartEnd>,
+    se: web::Json<StartEndWithUser>,
     conn: web::Data<r2d2::Pool<ConnectionManager<PgConnection>>>,
 ) -> Result<HttpResponse, error::Error> {
     use diesel::ExpressionMethods;
@@ -155,11 +163,13 @@ async fn add_schedule(
         .and_then(|conn| {
             diesel::insert_into(schedules::table)
                 .values((
-                    schedules::username.eq(&user),
+                    schedules::username.eq(&se.username),
+                    schedules::created_by.eq(&user),
                     schedules::start_time.eq(&se.start_time),
                     schedules::end_time.eq(&se.end_time),
                     schedules::permitted.eq(&false),
                     schedules::absent.eq(&false),
+                    schedules::enable.eq(&true),
                 ))
                 .get_result::<Schedule>(&conn)
                 .map_err(|x| error::Error::from(MyError::QueryError(x)))
@@ -186,7 +196,7 @@ async fn delete_schedule(
                 .map_err(|x| error::Error::from(MyError::QueryError(x)))?;
             let s = schedules::table
                 .filter(schedules::id.eq(id))
-                .filter(schedules::username.eq(user.clone()))
+                .filter(schedules::created_by.eq(user.clone()))
                 .get_result::<Schedule>(&conn)
                 .map_err(|x| error::Error::from(MyError::QueryError(x)))?;
             if !s.permitted {
@@ -199,15 +209,11 @@ async fn delete_schedule(
                     .map_err(|x| error::Error::from(MyError::QueryError(x)))?;
                 return Ok(ret);
             } else {
-                let ret = diesel::update(
-                    schedules::table
-                        .filter(schedules::username.eq(user))
-                        .filter(schedules::id.eq(id)),
-                )
-                .set(schedules::absent.eq(true))
-                .execute(&conn)
-                .map_err(|x| error::Error::from(MyError::QueryError(x)))
-                .map(|x| HttpResponse::Ok().json(x))?;
+                let ret = diesel::update(schedules::table.filter(schedules::id.eq(id)))
+                    .set(schedules::absent.eq(true))
+                    .execute(&conn)
+                    .map_err(|x| error::Error::from(MyError::QueryError(x)))
+                    .map(|x| HttpResponse::Ok().json(x))?;
                 let _ = ansi
                     .commit_transaction(&conn)
                     .map_err(|x| error::Error::from(MyError::QueryError(x)))?;

@@ -420,12 +420,15 @@ export default function Schedule() {
     const onClickCell = useCallback((i: number, day: number) => async () => {
         const start_time = new Date(addDay(startDate, day).getTime() + index2unixtime(i));
         const end_time = new Date(start_time.getTime() + defaultLength);
-        const id = await postSchedule(start_time, end_time);
         const t = getToken();
-        if (id && t) {
-            let nd = [...data];
-            nd.push({ start_time, end_time, id, permitted: false, absent: false, username: decodeJwt(t).user })
-            setData(nd);
+        if (t) {
+            const u: string = decodeJwt(t).user;
+            const id = await postSchedule(u, start_time, end_time);
+            if (id) {
+                let nd = [...data];
+                nd.push({ start_time, end_time, id, permitted: false, absent: false, enable: true, created_by: u, username: u }) // todo change username
+                setData(nd);
+            }
         } else {
             history.push('/login');
         }

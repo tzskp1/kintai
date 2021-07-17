@@ -6,6 +6,8 @@ table! {
         end_time -> Timestamptz,
         permitted -> Bool,
         absent -> Bool,
+        enable -> Bool,
+        created_by -> Varchar,
     }
 }
 
@@ -16,7 +18,5 @@ table! {
         isadmin -> Bool,
     }
 }
-
-joinable!(schedules -> users (username));
 
 allow_tables_to_appear_in_same_query!(schedules, users,);

@@ -31,7 +31,7 @@ export const getToken = () => {
     }
 };
 
-export const postSchedule = async (startTime: Date, endTime: Date) => {
+export const postSchedule = async (username: string, startTime: Date, endTime: Date) => {
     let token = getToken();
     if (!token) return undefined;
     let res = await fetch("/api/schedules", {
@@ -41,6 +41,7 @@ export const postSchedule = async (startTime: Date, endTime: Date) => {
             'Authorization': "bearer " + token,
         },
         body: JSON.stringify({
+            username,
             start_time: startTime.toISOString().replace('Z', ''),
             end_time: endTime.toISOString().replace('Z', '')
         })
@@ -59,7 +60,9 @@ export type Shift = {
     permitted: boolean;
     absent: boolean;
     username: string;
-    id: number
+    enable: boolean;
+    created_by: string;
+    id: number;
 }
 
 export const getSchedules = async () => {
