@@ -19,6 +19,8 @@ import TableBody from '@material-ui/core/TableBody';
 import TableCell from '@material-ui/core/TableCell';
 import TableHead from '@material-ui/core/TableHead';
 import TableRow from '@material-ui/core/TableRow';
+import NavigateBeforeIcon from '@material-ui/icons/NavigateBefore';
+import NavigateNextIcon from '@material-ui/icons/NavigateNext';
 import Toolbar from '@material-ui/core/Toolbar';
 import { makeStyles, useTheme, Theme, createStyles } from '@material-ui/core/styles';
 import Box from '@material-ui/core/Box';
@@ -82,8 +84,8 @@ const fixBox = (b: [number, number, number, number]): [number, number, number, n
 const insertLane = (s: Shift, ls: [number, number][][][], startDate: Date) => {
     const st = Math.max(Math.floor(date2index(s.start_time)), 0);
     const end = Math.min(Math.floor(date2index(s.end_time)), 47);
-    const sx = Math.max(Math.floor((s.start_time.getTime() - startDate.getTime()) / day), 0);
-    const ex = Math.min(Math.floor((s.end_time.getTime() - startDate.getTime()) / day), 6);
+    const sx = Math.min(Math.max(Math.floor((s.start_time.getTime() - startDate.getTime()) / day), 0), 6);
+    const ex = Math.min(Math.max(Math.floor((s.end_time.getTime() - startDate.getTime()) / day), 0), 6);
 
     let i, j;
     let xs = ls[st][sx];
@@ -165,11 +167,12 @@ export default function Schedule() {
             if (!getToken()) {
                 history.push('/login');
             }
+            const startDate = toDate(addDay(currentDate, -currentDate.getDay()));
             const endDate = addDay(startDate, 7);
             const schs = await getSchedules(startDate, endDate);
             if (schs) setData(schs);
         })();
-    }, [history, startDate]);
+    }, [history, currentDate]);
     const lanes = calcLaneArray(data, startDate);
     const sch2boxes = (s: Shift, fix = true): [number, number, number, number][] => {
         const st = date2index(s.start_time);
@@ -177,8 +180,8 @@ export default function Schedule() {
         const a = anchors.current;
         const w = 0.9 * cw;
         if (s.start_time.getDay() !== s.end_time.getDay()) {
-            const sx = Math.max(Math.floor((s.start_time.getTime() - startDate.getTime()) / day), 0);
-            const ex = Math.min(Math.floor((s.end_time.getTime() - startDate.getTime()) / day), 6);
+            const sx = Math.min(Math.max(Math.floor((s.start_time.getTime() - startDate.getTime()) / day), 0), 6);
+            const ex = Math.min(Math.max(Math.floor((s.end_time.getTime() - startDate.getTime()) / day), 0), 6);
             const ret = lanes[Math.floor(st)][sx].find((x) => x[0] === s.id);
             let ln = 0;
             if (ret) ln = ret[1];
@@ -207,7 +210,7 @@ export default function Schedule() {
             }
             return dst as [number, number, number, number][];
         } else {
-            const x = Math.max(Math.floor((s.start_time.getTime() - startDate.getTime()) / day), 0);
+            const x = Math.min(Math.max(Math.floor((s.start_time.getTime() - startDate.getTime()) / day), 0), 6);
             const ret = lanes[Math.floor(st)][x].find((x) => x[0] === s.id);
             let ln = 0;
             if (ret) ln = ret[1];
@@ -225,7 +228,7 @@ export default function Schedule() {
 
     const shift2zindex = (s: Shift) => {
         const st = Math.floor(date2index(s.start_time));
-        const sx = Math.max(Math.floor((s.start_time.getTime() - startDate.getTime()) / day), 0);
+        const sx = Math.min(Math.max(Math.floor((s.start_time.getTime() - startDate.getTime()) / day), 0), 6);
         const ret = lanes[st][sx].find((x) => x[0] === s.id);
         let ln = 0;
         if (ret) ln = ret[1];
@@ -240,6 +243,12 @@ export default function Schedule() {
     }, [cw]);
 
     const onDelete = useCallback(async (s: Shift) => {
+        const t = getToken();
+        if (t && s.username !== decodeJwt(t).user) {
+            alert('他人のシフトは変更できません'); // todo: replace
+            setData([...data]);
+            return;
+        }
         setData(data.filter((x) => x.id !== s.id));
         const ret = await deleteSchedule(s.id);
         if (!ret && !getToken()) {
@@ -435,8 +444,19 @@ export default function Schedule() {
         }
     }, [startDate, defaultLength, data, history]);
 
+    const prev = () => setDate(addDay(currentDate, -7));
+    const next = () => setDate(addDay(currentDate, 7));
+
     return (
         <>
+            <Toolbar>
+                <IconButton color="inherit" onClick={prev}>
+                    <NavigateBeforeIcon />
+                </IconButton>
+                <IconButton color="inherit" onClick={next}>
+                    <NavigateNextIcon />
+                </IconButton>
+            </Toolbar>
             <Paper ref={ref}>
                 <Table>
                     <TableHead>
