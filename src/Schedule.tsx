@@ -292,7 +292,11 @@ export default function Schedule() {
         const t = getToken();
         const i = data.findIndex((x) => x.id === s.id);
         let nd = [...data];
-        nd[i] = { ...s, absent: true };
+        if (t && decodeJwt(t).isadmin && s.absent) {
+            nd[i] = { ...s, absent: false };
+        } else {
+            nd[i] = { ...s, absent: true };
+        }
         setData(nd);
         let ret = await Utils.absentSchedule(s.id);
         if (!ret && !t) {
