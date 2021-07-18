@@ -420,24 +420,6 @@ async fn absent_schedule(
                 .begin_transaction(&conn)
                 .map_err(|x| error::Error::from(ServerError::QueryError(x)))?;
             let u = get_user(&conn, &user).ok_or(error::Error::from(ServerError::InternalError))?;
-            let ret1 = diesel::update(
-                schedules::table
-                    .filter(schedules::username.eq(user))
-                    .filter(schedules::id.eq(id))
-                    .filter(schedules::permitted.eq(true))
-                    .filter(schedules::absent.eq(false))
-                    .filter(schedules::enable.eq(true)),
-            )
-            .set(schedules::absent.eq(true))
-            .execute(&conn)
-            .map_err(|x| error::Error::from(ServerError::QueryError(x)))
-            .and_then(|s| {
-                if s == 1 {
-                    Ok(HttpResponse::Ok().json("ok"))
-                } else {
-                    Err(error::Error::from(ServerError::InternalError))
-                }
-            });
             let ret2 = if u.isadmin {
                 diesel::update(
                     schedules::table
@@ -457,6 +439,28 @@ async fn absent_schedule(
                     }
                 })
                 // todo: record the fact of rejected.
+            } else {
+                Err(error::Error::from(ServerError::InternalError))
+            };
+            let ret1 = if !ret2.is_ok() {
+                diesel::update(
+                    schedules::table
+                        .filter(schedules::username.eq(user))
+                        .filter(schedules::id.eq(id))
+                        .filter(schedules::permitted.eq(true))
+                        .filter(schedules::absent.eq(false))
+                        .filter(schedules::enable.eq(true)),
+                )
+                .set(schedules::absent.eq(true))
+                .execute(&conn)
+                .map_err(|x| error::Error::from(ServerError::QueryError(x)))
+                .and_then(|s| {
+                    if s == 1 {
+                        Ok(HttpResponse::Ok().json("ok"))
+                    } else {
+                        Err(error::Error::from(ServerError::InternalError))
+                    }
+                })
             } else {
                 Err(error::Error::from(ServerError::InternalError))
             };
@@ -485,25 +489,6 @@ async fn disable_schedule(
                 .begin_transaction(&conn)
                 .map_err(|x| error::Error::from(ServerError::QueryError(x)))?;
             let u = get_user(&conn, &user).ok_or(error::Error::from(ServerError::InternalError))?;
-            let ret1 = diesel::update(
-                schedules::table
-                    .filter(schedules::username.eq(user))
-                    .filter(schedules::id.eq(id))
-                    .filter(schedules::permitted.eq(false))
-                    .filter(schedules::absent.eq(false))
-                    .filter(schedules::enable.eq(true)),
-            )
-            .set(schedules::enable.eq(false))
-            .execute(&conn)
-            .map_err(|x| error::Error::from(ServerError::QueryError(x)))
-            .and_then(|s| {
-                if s == 1 {
-                    Ok(HttpResponse::Ok().json("ok"))
-                } else {
-                    Err(error::Error::from(ServerError::InternalError))
-                }
-            });
-
             let ret2 = if u.isadmin {
                 diesel::update(
                     schedules::table
@@ -525,6 +510,24 @@ async fn disable_schedule(
             } else {
                 Err(error::Error::from(ServerError::InternalError))
             };
+            let ret1 = diesel::update(
+                schedules::table
+                    .filter(schedules::username.eq(user))
+                    .filter(schedules::id.eq(id))
+                    .filter(schedules::permitted.eq(false))
+                    .filter(schedules::absent.eq(false))
+                    .filter(schedules::enable.eq(true)),
+            )
+            .set(schedules::enable.eq(false))
+            .execute(&conn)
+            .map_err(|x| error::Error::from(ServerError::QueryError(x)))
+            .and_then(|s| {
+                if s == 1 {
+                    Ok(HttpResponse::Ok().json("ok"))
+                } else {
+                    Err(error::Error::from(ServerError::InternalError))
+                }
+            });
             let _ = ansi
                 .commit_transaction(&conn)
                 .map_err(|x| error::Error::from(ServerError::QueryError(x)))?;
@@ -675,6 +678,154 @@ mod tests {
     use serde_json::{json, Value};
     use std::io::Write;
     use uuid::Uuid;
+
+    #[actix_rt::test]
+    async fn test_absent() {
+        let pool = establish_connection().unwrap();
+        let pg = create_pg();
+        let mut app = test::init_service(
+            App::new()
+                .configure(config)
+                .data(pool.clone())
+                .data(pg.clone()),
+        )
+        .await;
+
+        let resp = test::TestRequest::post()
+            .uri("/api/login")
+            .header(header::CONTENT_TYPE, "application/json")
+            .set_payload(r#"{"id":"root", "pass":"pass"}"#.as_bytes())
+            .send_request(&mut app)
+            .await;
+
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let ts: Value = read_body_json(resp).await;
+        let token_root = ts["token"].as_str().unwrap();
+        let user_id = Uuid::new_v4();
+        let resp = test::TestRequest::post()
+            .uri("/api/users")
+            .header(header::CONTENT_TYPE, "application/json")
+            .header("Authorization", format!("bearer {}", token_root))
+            .set_json(&json!({"id": user_id, "isadmin": false }))
+            .send_request(&mut app)
+            .await;
+
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let ps: Value = read_body_json(resp).await;
+        let test_pass = ps["pass"].as_str().unwrap();
+        let resp = test::TestRequest::post()
+            .uri("/api/login")
+            .header(header::CONTENT_TYPE, "application/json")
+            .set_json(&json!({"id": user_id, "pass": test_pass }))
+            .send_request(&mut app)
+            .await;
+
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let ts: Value = read_body_json(resp).await;
+        let token_test = ts["token"].as_str().unwrap();
+        let today = Local::now().naive_local();
+        let resp = test::TestRequest::post()
+            .uri("/api/schedules")
+            .header(header::CONTENT_TYPE, "application/json")
+            .header("Authorization", format!("bearer {}", token_test))
+            .set_json(&StartEndWithUser {
+                username: user_id.to_string(),
+                start_time: today,
+                end_time: today.checked_add_signed(Duration::days(1)).unwrap(),
+            })
+            .send_request(&mut app)
+            .await;
+
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let ps: Value = read_body_json(resp).await;
+        let sid = ps["id"].as_i64().unwrap();
+
+        let resp = test::TestRequest::patch()
+            .uri(&format!("/api/schedules/{}/permission", sid))
+            .header(header::CONTENT_TYPE, "application/json")
+            .header("Authorization", format!("bearer {}", token_root))
+            .send_request(&mut app)
+            .await;
+
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let resp = test::TestRequest::patch()
+            .uri(&format!("/api/schedules/{}/absence", sid))
+            .header(header::CONTENT_TYPE, "application/json")
+            .header("Authorization", format!("bearer {}", token_test))
+            .send_request(&mut app)
+            .await;
+
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let resp = test::TestRequest::get()
+            .uri("/api/schedules")
+            .header(header::CONTENT_TYPE, "application/json")
+            .header("Authorization", format!("bearer {}", token_test))
+            .send_request(&mut app)
+            .await;
+
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let ss: Vec<Schedule> = read_body_json(resp).await;
+        let s = ss.iter().find(|x| x.id == sid).unwrap();
+
+        assert_eq!(s.absent, true);
+
+        let today = Local::now().naive_local();
+        let resp = test::TestRequest::post()
+            .uri("/api/schedules")
+            .header(header::CONTENT_TYPE, "application/json")
+            .header("Authorization", format!("bearer {}", token_root))
+            .set_json(&StartEndWithUser {
+                username: "root".to_string(),
+                start_time: today,
+                end_time: today.checked_add_signed(Duration::days(1)).unwrap(),
+            })
+            .send_request(&mut app)
+            .await;
+
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let ps: Value = read_body_json(resp).await;
+        let sid = ps["id"].as_i64().unwrap();
+
+        let resp = test::TestRequest::patch()
+            .uri(&format!("/api/schedules/{}/permission", sid))
+            .header(header::CONTENT_TYPE, "application/json")
+            .header("Authorization", format!("bearer {}", token_root))
+            .send_request(&mut app)
+            .await;
+
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let resp = test::TestRequest::patch()
+            .uri(&format!("/api/schedules/{}/absence", sid))
+            .header(header::CONTENT_TYPE, "application/json")
+            .header("Authorization", format!("bearer {}", token_root))
+            .send_request(&mut app)
+            .await;
+
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let resp = test::TestRequest::get()
+            .uri("/api/schedules")
+            .header(header::CONTENT_TYPE, "application/json")
+            .header("Authorization", format!("bearer {}", token_root))
+            .send_request(&mut app)
+            .await;
+
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let ss: Vec<Schedule> = read_body_json(resp).await;
+        let s = ss.iter().find(|x| x.id == sid).unwrap();
+
+        assert_eq!(s.absent, true);
+    }
 
     #[actix_rt::test]
     async fn test_normal_system() {

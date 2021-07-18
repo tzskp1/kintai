@@ -17,8 +17,8 @@ pub struct NewUser<'a> {
 
 use super::schema::schedules;
 
-use serde::Serialize;
-#[derive(Queryable, Associations, Serialize, Debug)]
+use serde::{Deserialize, Serialize};
+#[derive(Queryable, Associations, Serialize, Deserialize, Debug)]
 #[belongs_to(User, foreign_key = "username")]
 pub struct Schedule {
     pub id: i64,
