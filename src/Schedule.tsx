@@ -251,7 +251,7 @@ export default function Schedule() {
         }
         setData(data.filter((x) => x.id !== s.id));
         const ret = await deleteSchedule(s.id);
-        if (!ret && !getToken()) {
+        if (!ret && !t) {
             history.push('/login');
         }
     }, [data, history]);
@@ -444,8 +444,15 @@ export default function Schedule() {
         }
     }, [startDate, defaultLength, data, history]);
 
-    const prev = () => setDate(addDay(currentDate, -7));
-    const next = () => setDate(addDay(currentDate, 7));
+    const prev = () => {
+        setData([]);
+        setDate(addDay(currentDate, -7));
+    }
+
+    const next = () => {
+        setData([]);
+        setDate(addDay(currentDate, 7));
+    }
 
     return (
         <>
