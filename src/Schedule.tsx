@@ -86,37 +86,44 @@ const fixBox = (b: [number, number, number, number]): [number, number, number, n
 }
 
 const insertLane = (s: Shift, ls: [number, number][][][], startDate: Date) => {
-    const st = Math.max(Math.floor(date2index(s.start_time)), 0);
-    const end = Math.min(Math.floor(date2index(s.end_time)), 47);
-    const sx = Math.min(Math.max(Math.floor((s.start_time.getTime() - startDate.getTime()) / day), 0), 6);
-    const ex = Math.min(Math.max(Math.floor((s.end_time.getTime() - startDate.getTime()) / day), 0), 6);
-
+    const st = Math.floor(date2index(s.start_time));
+    const end = Math.floor(date2index(s.end_time));
+    const sx = Math.floor((s.start_time.getTime() - startDate.getTime()) / day);
+    const ex = Math.floor((s.end_time.getTime() - startDate.getTime()) / day);
     let i, j;
-    let xs = ls[st][sx];
+    let xs = ls[st][Math.min(Math.max(sx, 0), 6)];
     xs.sort((a, b) => a[1] - b[1]);
     const l = findVacant(xs);
     xs.push([s.id, l]);
     xs.sort((a, b) => a[1] - b[1]);
-    ls[st][sx] = xs;
+    ls[st][Math.min(Math.max(sx, 0), 6)] = xs;
     if (s.start_time.getDay() !== s.end_time.getDay()) {
         for (i = st + 1; i < 48; i++) {
-            ls[i][sx].push([s.id, l]);
-            ls[i][sx].sort((a, b) => a[1] - b[1]);
+            if (sx < 7 && 0 <= sx) {
+                ls[i][sx].push([s.id, l]);
+                ls[i][sx].sort((a, b) => a[1] - b[1]);
+            }
         }
         for (j = sx + 1; j < ex; j++) {
             for (i = 0; i < 48; i++) {
-                ls[i][j].push([s.id, l]);
-                ls[i][j].sort((a, b) => a[1] - b[1]);
+                if (j < 7 && 0 <= j) {
+                    ls[i][j].push([s.id, l]);
+                    ls[i][j].sort((a, b) => a[1] - b[1]);
+                }
             }
         }
         for (i = 0; i < end; i++) {
-            ls[i][ex].push([s.id, l]);
-            ls[i][ex].sort((a, b) => a[1] - b[1]);
+            if (ex < 7 && 0 <= ex) {
+                ls[i][ex].push([s.id, l]);
+                ls[i][ex].sort((a, b) => a[1] - b[1]);
+            }
         }
     } else {
         for (i = st + 1; i < end; i++) {
-            ls[i][sx].push([s.id, l]);
-            ls[i][sx].sort((a, b) => a[1] - b[1]);
+            if (sx < 7 && 0 <= sx) {
+                ls[i][sx].push([s.id, l]);
+                ls[i][sx].sort((a, b) => a[1] - b[1]);
+            }
         }
     }
 }
