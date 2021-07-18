@@ -6,10 +6,10 @@ use chrono::{Duration, NaiveDate};
 use derive_more::{Display, Error};
 use diesel::connection::{AnsiTransactionManager, TransactionManager};
 use diesel::query_dsl::methods::FilterDsl;
-use diesel::RunQueryDsl;
 use diesel::{
     pg::PgConnection,
     r2d2::{self, ConnectionManager},
+    RunQueryDsl,
 };
 use kintai::models::{Schedule, User};
 use kintai::{
@@ -106,6 +106,7 @@ async fn get_schedules(
     req: HttpRequest,
     conn: web::Data<r2d2::Pool<ConnectionManager<PgConnection>>>,
 ) -> Result<HttpResponse, error::Error> {
+    use diesel::query_dsl::filter_dsl::OrFilterDsl;
     use diesel::query_dsl::methods::OrderDsl;
     use diesel::ExpressionMethods;
     use qstring::QString;
@@ -114,23 +115,27 @@ async fn get_schedules(
     let _ = auth(&req).ok_or(error::ErrorUnauthorized("unauthorized error"))?;
     let qs = QString::from(req.query_string());
     let today = Local::now().naive_local().date();
-    let start_date = today
-        .checked_sub_signed(Duration::days(
-            today.weekday().num_days_from_sunday().into(),
-        ))
-        .ok_or(error::Error::from(ServerError::InternalError))?;
+    let start_date = today.checked_sub_signed(Duration::days(
+        today.weekday().num_days_from_sunday().into(),
+    ));
     let end_date = start_date
-        .checked_add_signed(Duration::days(7))
-        .ok_or(error::Error::from(ServerError::InternalError))?;
+        .as_ref()
+        .and_then(|x| x.checked_add_signed(Duration::days(7)));
     let start = qs
         .get("start")
-        .map(|x| NaiveDate::parse_from_str(x, "%Y-%m-%d"))
-        .unwrap_or_else(|| Ok(start_date))
+        .map(|x| {
+            NaiveDate::parse_from_str(x, "%Y-%m-%d")
+                .or_else(|_| Err(error::Error::from(ServerError::InternalError)))
+        })
+        .unwrap_or_else(|| start_date.ok_or(error::Error::from(ServerError::InternalError)))
         .map_err(|x| error::ErrorBadRequest(format!("cannot parse start: {}", x)))?;
     let end = qs
         .get("end")
-        .map(|x| NaiveDate::parse_from_str(x, "%Y-%m-%d"))
-        .unwrap_or_else(|| Ok(end_date))
+        .map(|x| {
+            NaiveDate::parse_from_str(x, "%Y-%m-%d")
+                .or_else(|_| Err(error::Error::from(ServerError::InternalError)))
+        })
+        .unwrap_or_else(|| end_date.ok_or(error::Error::from(ServerError::InternalError)))
         .map_err(|x| error::ErrorBadRequest(format!("cannot parse end: {}", x)))?;
     conn.get()
         .ok()
@@ -139,7 +144,7 @@ async fn get_schedules(
             schedules::table
                 .order(schedules::start_time.desc())
                 .filter(schedules::end_time.gt(start.and_hms(0, 0, 0)))
-                .filter(schedules::start_time.lt(end.and_hms(0, 0, 0)))
+                .or_filter(schedules::start_time.lt(end.and_hms(0, 0, 0)))
                 .get_results::<Schedule>(&conn)
                 .map_err(|x| error::Error::from(ServerError::QueryError(x)))
                 .map(|x| HttpResponse::Ok().json(x))

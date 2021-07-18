@@ -7,6 +7,9 @@ import { BrowserRouter, Route, Switch, Redirect } from "react-router-dom";
 import { createTheme } from "@material-ui/core/styles";
 import { ThemeProvider } from "@material-ui/styles";
 import * as colors from "@material-ui/core/colors";
+import "typeface-roboto";
+import "fontsource-noto-sans-jp";
+import "fontsource-noto-sans-jp/500.css";
 
 const theme = createTheme({
     typography: {

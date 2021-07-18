@@ -189,9 +189,9 @@ export default function Schedule() {
         const a = anchors.current;
         const w = 0.9 * cw;
         if (s.start_time.getDay() !== s.end_time.getDay()) {
-            const sx = Math.min(Math.max(Math.floor((s.start_time.getTime() - startDate.getTime()) / day), 0), 6);
-            const ex = Math.min(Math.max(Math.floor((s.end_time.getTime() - startDate.getTime()) / day), 0), 6);
-            const ret = lanes[Math.floor(st)][sx].find((x) => x[0] === s.id);
+            const sx = Math.floor((s.start_time.getTime() - startDate.getTime()) / day);
+            const ex = Math.floor((s.end_time.getTime() - startDate.getTime()) / day);
+            const ret = lanes[Math.floor(st)][Math.min(Math.max(sx, 0), 6)].find((x) => x[0] === s.id);
             let ln = 0;
             if (ret) ln = ret[1];
             const fb = fix ? iter(fixBox, ln) : Utils.id;
@@ -219,8 +219,8 @@ export default function Schedule() {
             }
             return dst as [number, number, number, number][];
         } else {
-            const x = Math.min(Math.max(Math.floor((s.start_time.getTime() - startDate.getTime()) / day), 0), 6);
-            const ret = lanes[Math.floor(st)][x].find((x) => x[0] === s.id);
+            const x = Math.floor((s.start_time.getTime() - startDate.getTime()) / day);
+            const ret = lanes[Math.floor(st)][Math.min(Math.max(x, 0), 6)].find((x) => x[0] === s.id);
             let ln = 0;
             if (ret) ln = ret[1];
             const fb = fix ? iter(fixBox, ln) : Utils.id;
@@ -475,14 +475,14 @@ export default function Schedule() {
                 >
                     <Toolbar style={{ justifyContent: "flex-end" }}>
                         {
-                            sft.enable && !sft.permitted && (isadmin || (sft.created_by !== sft.username && sft.username === user)) ?
+                            sft.enable && (!sft.permitted || sft.absent) && (isadmin || (sft.created_by !== sft.username && sft.username === user)) ?
                                 <IconButton color="inherit" onClick={disableSft}>
                                     <BlockIcon />
                                 </IconButton>
                                 : undefined
                         }
                         {
-                            sft.enable && !sft.permitted && sft.created_by === user ?
+                            !sft.permitted && sft.created_by === user ?
                                 <IconButton color="inherit" onClick={deleteSft}>
                                     <DeleteIcon />
                                 </IconButton>
