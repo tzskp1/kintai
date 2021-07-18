@@ -258,7 +258,7 @@ async fn delete_user(
     let ansi = AnsiTransactionManager::new();
     let user = auth(&req).ok_or(error::ErrorUnauthorized("unauthorized error"))?;
     // -- for demo --
-    if user == "root" {
+    if id == "root" {
         return Err(error::ErrorForbidden("cannot remove root"));
     }
     // -- for demo --
@@ -581,8 +581,8 @@ async fn delete_schedule(
 ) -> Result<HttpResponse, error::Error> {
     use diesel::ExpressionMethods;
     use schema::schedules;
-    let ansi = AnsiTransactionManager::new();
 
+    let ansi = AnsiTransactionManager::new();
     let user = auth(&req).ok_or(error::ErrorUnauthorized("unauthorized error"))?;
     conn.get()
         .ok()
@@ -636,10 +636,10 @@ fn config(cfg: &mut web::ServiceConfig) {
         )
         .route("/api/schedules", web::post().to(add_schedule))
         .route("/api/schedules", web::get().to(get_schedules))
+        .service(web::resource("/api/users/{id}").route(web::delete().to(delete_user)))
+        .route("/api/users/me/password", web::patch().to(update_password))
         .route("/api/users", web::post().to(add_user))
         .route("/api/users", web::get().to(get_users))
-        .route("/api/users/me/password", web::patch().to(update_password))
-        .service(web::resource("/api/users/{id}").route(web::delete().to(delete_user)))
         .route("/", web::get().to(index))
         .service(Files::new("/", "./build").prefer_utf8(true));
 }
@@ -997,6 +997,87 @@ mod tests {
 
         let resp = test::TestRequest::patch()
             .uri(&format!("/api/schedules/{}/availability", sid))
+            .header(header::CONTENT_TYPE, "application/json")
+            .header("Authorization", format!("bearer {}", token_root))
+            .send_request(&mut app)
+            .await;
+
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[actix_rt::test]
+    async fn test_delete_user() {
+        let pool = establish_connection().unwrap();
+        let pg = create_pg();
+        let mut app = test::init_service(
+            App::new()
+                .configure(config)
+                .data(pool.clone())
+                .data(pg.clone()),
+        )
+        .await;
+
+        let resp = test::TestRequest::post()
+            .uri("/api/login")
+            .header(header::CONTENT_TYPE, "application/json")
+            .set_payload(r#"{"id":"root", "pass":"pass"}"#.as_bytes())
+            .send_request(&mut app)
+            .await;
+
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let ts: Value = read_body_json(resp).await;
+        let token_root = ts["token"].as_str().unwrap();
+        let user_id = Uuid::new_v4();
+        let resp = test::TestRequest::post()
+            .uri("/api/users")
+            .header(header::CONTENT_TYPE, "application/json")
+            .header("Authorization", format!("bearer {}", token_root))
+            .set_json(&json!({"id": user_id, "isadmin": false }))
+            .send_request(&mut app)
+            .await;
+
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let ps: Value = read_body_json(resp).await;
+        let test_pass = ps["pass"].as_str().unwrap();
+        let resp = test::TestRequest::post()
+            .uri("/api/login")
+            .header(header::CONTENT_TYPE, "application/json")
+            .set_json(&json!({"id": user_id, "pass": test_pass }))
+            .send_request(&mut app)
+            .await;
+
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let ts: Value = read_body_json(resp).await;
+        let token_test = ts["token"].as_str().unwrap();
+        let today = Local::now().naive_local();
+        let resp = test::TestRequest::post()
+            .uri("/api/schedules")
+            .header(header::CONTENT_TYPE, "application/json")
+            .header("Authorization", format!("bearer {}", token_test))
+            .set_json(&StartEndWithUser {
+                username: user_id.to_string(),
+                start_time: today,
+                end_time: today.checked_add_signed(Duration::days(1)).unwrap(),
+            })
+            .send_request(&mut app)
+            .await;
+
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let resp = test::TestRequest::delete()
+            .uri(&format!("/api/users/{}", user_id))
+            .header(header::CONTENT_TYPE, "application/json")
+            .header("Authorization", format!("bearer {}", token_test))
+            .send_request(&mut app)
+            .await;
+
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+
+        let resp = test::TestRequest::delete()
+            .uri(&format!("/api/users/{}", user_id))
             .header(header::CONTENT_TYPE, "application/json")
             .header("Authorization", format!("bearer {}", token_root))
             .send_request(&mut app)
