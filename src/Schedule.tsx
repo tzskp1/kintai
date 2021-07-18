@@ -152,7 +152,7 @@ export default function Schedule() {
                     }
                 }
             }));
-        let rect = cells.current[0][0].getBoundingClientRect();
+        const rect = cells.current[0][0].getBoundingClientRect();
         setCw(rect.width);
         setRh(rect.height);
         anchors.current[48].forEach((_u, i, _) => {
@@ -469,13 +469,7 @@ export default function Schedule() {
                     <TableHead>
                         <TableRow>
                             <TableCell />
-                            <TableCell className={classes.tableHead} width={cw}>{startDate.getDate()}</TableCell>
-                            <TableCell className={classes.tableHead} width={cw}>{addDay(startDate, 1).getDate()}</TableCell>
-                            <TableCell className={classes.tableHead} width={cw}>{addDay(startDate, 2).getDate()}</TableCell>
-                            <TableCell className={classes.tableHead} width={cw}>{addDay(startDate, 3).getDate()}</TableCell>
-                            <TableCell className={classes.tableHead} width={cw}>{addDay(startDate, 4).getDate()}</TableCell>
-                            <TableCell className={classes.tableHead} width={cw}>{addDay(startDate, 5).getDate()}</TableCell>
-                            <TableCell className={classes.tableHead} width={cw}>{addDay(startDate, 6).getDate()}</TableCell>
+                            {seq(7).map((j) => <TableCell className={classes.tableHead} width={cw}>{addDay(startDate, j).getDate()}</TableCell>)}
                         </TableRow>
                     </TableHead>
                     <TableBody>
@@ -483,13 +477,7 @@ export default function Schedule() {
                             return (
                                 <TableRow className={classes.tableRow}>
                                     <TableCell className={classes.tableTime} style={{ transform: `translateY(${-rh / 2}px)` }}>{timeFormat(new Date(index2unixtime(i)))}</TableCell>
-                                    <TableCell ref={(r) => { cells.current[i][0] = r }} className={classes.tableCell} width={cw} onClick={onClickCell(i, 0)} />
-                                    <TableCell ref={(r) => { cells.current[i][1] = r }} className={classes.tableCell} width={cw} onClick={onClickCell(i, 1)} />
-                                    <TableCell ref={(r) => { cells.current[i][2] = r }} className={classes.tableCell} width={cw} onClick={onClickCell(i, 2)} />
-                                    <TableCell ref={(r) => { cells.current[i][3] = r }} className={classes.tableCell} width={cw} onClick={onClickCell(i, 3)} />
-                                    <TableCell ref={(r) => { cells.current[i][4] = r }} className={classes.tableCell} width={cw} onClick={onClickCell(i, 4)} />
-                                    <TableCell ref={(r) => { cells.current[i][5] = r }} className={classes.tableCell} width={cw} onClick={onClickCell(i, 5)} />
-                                    <TableCell ref={(r) => { cells.current[i][6] = r }} className={classes.tableCell} width={cw} onClick={onClickCell(i, 6)} />
+                                    {seq(7).map((j) => <TableCell ref={(r) => { cells.current[i][j] = r }} className={classes.tableCell} width={cw} onClick={onClickCell(i, j)} />)}
                                 </TableRow>
                             );
                         })}
