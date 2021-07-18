@@ -25,7 +25,8 @@ import Toolbar from '@material-ui/core/Toolbar';
 import { makeStyles, useTheme, Theme, createStyles } from '@material-ui/core/styles';
 import Box from '@material-ui/core/Box';
 import { sizing, palette, positions } from '@material-ui/system';
-import { getSchedules, seq, Shift, day, updateSchedule, deleteSchedule, getToken, addDay, toDate, timeFormat, postSchedule, decodeJwt, iter, id } from './Utils';
+import * as Utils from './Utils';
+import { getSchedules, seq, Shift, day, updateSchedule, deleteSchedule, getToken, addDay, toDate, timeFormat, postSchedule, decodeJwt, iter, getUsers, User } from './Utils';
 import { useResizeDetector } from 'react-resize-detector';
 import { useHistory } from 'react-router-dom';
 import Popover from '@material-ui/core/Popover';
@@ -134,10 +135,13 @@ export default function Schedule() {
     const [data, setData] = useState<Shift[]>([]);
     const [currentDate, setDate] = useState(new Date());
     const startDate = toDate(addDay(currentDate, -currentDate.getDay()));
+    const [users, setUsers] = useState<User[]>([]);
     const cells = useRef<any[][]>(seq(48).map((_) => seq(7).map((_) => undefined)));
     const anchors = useRef<number[][][]>(seq(49).map((_) => seq(7).map((_) => [-1, -1])));
     const [cw, setCw] = useState(100); // column width
     const [rh, setRh] = useState(25); // row height
+    const [anchorEl, setAnchorEl] = useState<HTMLElement | undefined>(undefined);
+    const postCallback = useRef((u: string) => async () => { });
     const drgSense = 15;
     const moveSense = 3;
     const defaultLength = 60 * 60 * 1000; // 1 hour
@@ -171,6 +175,8 @@ export default function Schedule() {
             const endDate = addDay(startDate, 7);
             const schs = await getSchedules(startDate, endDate);
             if (schs) setData(schs);
+            const us = await getUsers();
+            if (us) setUsers(us);
         })();
     }, [history, currentDate]);
     const lanes = calcLaneArray(data, startDate);
@@ -185,7 +191,7 @@ export default function Schedule() {
             const ret = lanes[Math.floor(st)][sx].find((x) => x[0] === s.id);
             let ln = 0;
             if (ret) ln = ret[1];
-            const fb = fix ? iter(fixBox, ln) : id;
+            const fb = fix ? iter(fixBox, ln) : Utils.id;
             let dst = [];
             if (sx < 7 && 0 <= sx) {
                 const l = a[Math.floor(st)][sx][0] + (a[Math.floor(st) + 1][sx][0] - a[Math.floor(st)][sx][0]) * (st - Math.floor(st));
@@ -214,7 +220,7 @@ export default function Schedule() {
             const ret = lanes[Math.floor(st)][x].find((x) => x[0] === s.id);
             let ln = 0;
             if (ret) ln = ret[1];
-            const fb = fix ? iter(fixBox, ln) : id;
+            const fb = fix ? iter(fixBox, ln) : Utils.id;
             if (x < 7 && 0 <= x) {
                 const l = a[Math.floor(st)][x][0] + (a[Math.floor(st) + 1][x][0] - a[Math.floor(st)][x][0]) * (st - Math.floor(st));
                 const t = a[Math.floor(st)][x][1] + (a[Math.floor(st) + 1][x][1] - a[Math.floor(st)][x][1]) * (st - Math.floor(st));
@@ -244,16 +250,26 @@ export default function Schedule() {
 
     const onDelete = useCallback(async (s: Shift) => {
         const t = getToken();
-        if (t && s.username !== decodeJwt(t).user) {
+        const del = async () => {
+            const ret = await deleteSchedule(s.id);
+            if (!ret && !t) {
+                history.push('/login');
+            }
+        };
+        if (t && s.username === decodeJwt(t).user && s.created_by !== decodeJwt(t).user) {
+            const i = data.findIndex((x) => x.id === s.id);
+            let nd = [...data];
+            nd[i] = { ...s, absent: true };
+            setData(nd);
+            await del();
+            return;
+        } else if (t && s.created_by !== decodeJwt(t).user) {
             alert('他人のシフトは変更できません'); // todo: replace
             setData([...data]);
             return;
         }
         setData(data.filter((x) => x.id !== s.id));
-        const ret = await deleteSchedule(s.id);
-        if (!ret && !t) {
-            history.push('/login');
-        }
+        await del();
     }, [data, history]);
 
     const onUp = useCallback(async (s: Shift) => {
@@ -263,7 +279,7 @@ export default function Schedule() {
             return;
         }
         const t = getToken();
-        if (t && s.username !== decodeJwt(t).user) {
+        if (t && s.created_by !== decodeJwt(t).user) {
             alert('他人のシフトは変更できません'); // todo: replace
             setData([...data]);
             return;
@@ -303,7 +319,7 @@ export default function Schedule() {
             setAnchorEl(event.currentTarget.ownerDocument.body);
         };
 
-        const handleClose = () => setAnchorEl(undefined);
+        const handleClose = useCallback(() => setAnchorEl(undefined), []);
 
         const onMove = async (e: any) => {
             if (!isDrg.current && !isRsz.current) return;
@@ -383,6 +399,7 @@ export default function Schedule() {
 
         const open = Boolean(anchorEl);
         const id = open ? `multibox-popover${sft.id}` : undefined;
+
         return (
             <div>
                 <div>
@@ -427,32 +444,50 @@ export default function Schedule() {
         );
     }
 
+    const popoverClose = useCallback(() => setAnchorEl(undefined), []);
     const onClickCell = useCallback((i: number, day: number) => async () => {
         const start_time = new Date(addDay(startDate, day).getTime() + index2unixtime(i));
         const end_time = new Date(start_time.getTime() + defaultLength);
         const t = getToken();
         if (t) {
+            const a: boolean = decodeJwt(t).isadmin;
             const u: string = decodeJwt(t).user;
-            const id = await postSchedule(u, start_time, end_time);
-            if (id) {
-                let nd = [...data];
-                nd.push({ start_time, end_time, id, permitted: false, absent: false, enable: true, created_by: u, username: u }) // todo change username
-                setData(nd);
+            if (!a) {
+                const id = await postSchedule(u, start_time, end_time);
+                if (id) {
+                    let nd = [...data];
+                    nd.push({ start_time, end_time, id, permitted: false, absent: false, enable: true, created_by: u, username: u })
+                    setData(nd);
+                }
+            } else {
+                postCallback.current = (target: string) => async () => {
+                    const id = await postSchedule(target, start_time, end_time);
+                    if (id) {
+                        let nd = [...data];
+                        nd.push({ start_time, end_time, id, permitted: false, absent: false, enable: true, created_by: u, username: target })
+                        setData(nd);
+                    }
+                    popoverClose();
+                }
+                setAnchorEl(cells.current[i][day]);
             }
         } else {
             history.push('/login');
         }
-    }, [startDate, defaultLength, data, history]);
+    }, [startDate, defaultLength, data, history, popoverClose]);
 
-    const prev = () => {
+    const prev = useCallback(() => {
         setData([]);
         setDate(addDay(currentDate, -7));
-    }
+    }, [currentDate]);
 
-    const next = () => {
+    const next = useCallback(() => {
         setData([]);
         setDate(addDay(currentDate, 7));
-    }
+    }, [currentDate]);
+
+    const open = Boolean(anchorEl);
+    const id = open ? `schedule-popover` : undefined;
 
     return (
         <>
@@ -483,6 +518,24 @@ export default function Schedule() {
                         })}
                     </TableBody>
                 </Table>
+                <Popover
+                    id={id}
+                    open={open}
+                    anchorEl={anchorEl}
+                    onClose={popoverClose}
+                    anchorOrigin={{
+                        vertical: 'top',
+                        horizontal: 'center',
+                    }}
+                    transformOrigin={{
+                        vertical: 'top',
+                        horizontal: 'right',
+                    }}
+                >
+                    <List>
+                        {users.map((u) => <ListItem button onClick={postCallback.current(u.id)}><ListItemText primary={u.id} /></ListItem>)}
+                    </List>
+                </Popover>
             </Paper>
             <div>{data.map((s) => <MultiBox shift={s} />)}</div>
         </>

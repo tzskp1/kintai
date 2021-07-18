@@ -54,6 +54,11 @@ export const postSchedule = async (username: string, startTime: Date, endTime: D
     }
 };
 
+export type User = {
+    isadmin: boolean;
+    id: string;
+}
+
 export type Shift = {
     start_time: Date;
     end_time: Date;
@@ -64,6 +69,23 @@ export type Shift = {
     created_by: string;
     id: number;
 }
+
+export const getUsers = async () => {
+    let token = getToken();
+    if (!token) return undefined;
+    let res = await fetch('/api/users', {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': "bearer " + token,
+        },
+    });
+    if (res.ok) {
+        return await res.json() as User[];
+    } else {
+        return undefined;
+    }
+};
 
 export const getSchedules = async (start: Date, end: Date) => {
     let token = getToken();
