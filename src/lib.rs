@@ -17,6 +17,7 @@ use diesel::{
 };
 use dotenv::dotenv;
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, TokenData, Validation};
+use passwords::PasswordGenerator;
 use serde::{Deserialize, Serialize};
 use std::env;
 
@@ -151,4 +152,17 @@ pub fn update_password<'a>(
         .set(users::pass.eq(hashed))
         .execute(conn)
         .map_err(|x| UpdatePasswordError::QueryError(x))
+}
+
+pub fn create_pg() -> PasswordGenerator {
+    PasswordGenerator {
+        length: 12,
+        numbers: true,
+        lowercase_letters: true,
+        uppercase_letters: true,
+        symbols: true,
+        spaces: false,
+        exclude_similar_characters: true,
+        strict: true,
+    }
 }

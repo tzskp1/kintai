@@ -18,3 +18,5 @@ serde_json = "1.0.59"
 derive_more = { version = "0.99.0", default-features = false, features = ["from", "add", "iterator"] }
 qstring = "0.7.2"
 passwords = "3.1.7"
+actix-rt = "2.2.0"
+uuid = { version = "0.8", features = ["serde", "v4"] }

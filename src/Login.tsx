@@ -15,6 +15,7 @@ import { makeStyles } from '@material-ui/core/styles';
 import Container from '@material-ui/core/Container';
 import { login, getToken } from './Utils'
 import { useHistory } from 'react-router-dom';
+import Alert from '@material-ui/lab/Alert';
 
 const useStyles = makeStyles((theme) => ({
     paper: {
@@ -40,6 +41,7 @@ export default function SignIn({ }) {
     const history = useHistory();
     const classes = useStyles();
     const [email, setEmail] = useState('');
+    const [error, setError] = useState(false);
     const [pass, setPass] = useState('');
     useEffect(() => {
         if (getToken()) {
@@ -82,6 +84,7 @@ export default function SignIn({ }) {
                         autoComplete="current-password"
                         onChange={(e) => setPass(e.target.value)}
                     />
+                    {error ? <Alert severity="error">ユーザー名かパスワードが異なります</Alert> : undefined}
                     <Button
                         type="submit"
                         fullWidth
@@ -89,9 +92,13 @@ export default function SignIn({ }) {
                         color="primary"
                         className={classes.submit}
                         onClick={async () => {
-                            let t = await login(email, pass);
-                            localStorage.setItem('token', t);
-                            history.push('/schedules');
+                            const t = await login(email, pass);
+                            if (t) {
+                                localStorage.setItem('token', t);
+                                history.push('/schedules');
+                            } else {
+                                setError(true);
+                            }
                         }}
                     >
                         ログイン

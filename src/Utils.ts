@@ -14,17 +14,21 @@ export const decodeJwt = (token: string) => {
 };
 
 export const login = async (email: string, pass: string) => {
-    let t = await (await fetch("/api/login", {
+    const res = await fetch("/api/login", {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: email, pass })
-    })).json();
-    return t.token;
+    });
+    if (res.ok) {
+        return (await res.json()).token as string;
+    } else {
+        return undefined;
+    }
 };
 
 export const getToken = () => {
     let t = localStorage.getItem('token');
-    if (t && new Date() < new Date(decodeJwt(t).exp * 1000)) {
+    if (t && (new Date()).getTime() < (new Date(decodeJwt(t).exp * 1000)).getTime()) {
         return t;
     } else {
         return undefined;
@@ -118,7 +122,7 @@ export const day = 24 * 60 * 60 * 1000;
 export const updateSchedule = async (id: number, startTime: Date, endTime: Date) => {
     let token = getToken();
     if (!token) return undefined;
-    let res = await fetch(`/api/schedules/${id}`, {
+    let res = await fetch(`/api/schedules/${id}/duration`, {
         method: 'PATCH',
         headers: {
             'Content-Type': 'application/json',
@@ -179,3 +183,29 @@ export const deleteSchedule = async (id: number) => {
         return undefined;
     }
 };
+
+const touchSchedule = async (verb: string) => {
+    let token = getToken();
+    if (!token) return undefined;
+    let res = await fetch(verb, {
+        method: 'PATCH',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': "bearer " + token,
+        }
+    });
+    if (res.ok) {
+        return await res.json();
+    } else {
+        return undefined;
+    }
+};
+
+export const disableSchedule = async (id: number) =>
+    await touchSchedule(`/api/schedules/${id}/availability`);
+
+export const permitSchedule = async (id: number) =>
+    await touchSchedule(`/api/schedules/${id}/permission`);
+
+export const absentSchedule = async (id: number) =>
+    await touchSchedule(`/api/schedules/${id}/absence`);

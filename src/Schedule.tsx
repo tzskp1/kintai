@@ -7,12 +7,15 @@ import IconButton from '@material-ui/core/IconButton';
 import DeleteIcon from '@material-ui/icons/Delete';
 import InboxIcon from '@material-ui/icons/MoveToInbox';
 import CloseIcon from '@material-ui/icons/Close';
+import HealingIcon from '@material-ui/icons/Healing';
+import AssignmentIcon from '@material-ui/icons/Assignment';
 import List from '@material-ui/core/List';
 import ListItem from '@material-ui/core/ListItem';
 import ListItemIcon from '@material-ui/core/ListItemIcon';
 import ListItemText from '@material-ui/core/ListItemText';
 import MailIcon from '@material-ui/icons/Mail';
 import MenuIcon from '@material-ui/icons/Menu';
+import BlockIcon from '@material-ui/icons/Block';
 import Typography from '@material-ui/core/Typography';
 import Table from '@material-ui/core/Table';
 import TableBody from '@material-ui/core/TableBody';
@@ -250,26 +253,57 @@ export default function Schedule() {
 
     const onDelete = useCallback(async (s: Shift) => {
         const t = getToken();
-        const del = async () => {
-            const ret = await deleteSchedule(s.id);
-            if (!ret && !t) {
-                history.push('/login');
-            }
-        };
-        if (t && s.username === decodeJwt(t).user && s.created_by !== decodeJwt(t).user) {
-            const i = data.findIndex((x) => x.id === s.id);
-            let nd = [...data];
-            nd[i] = { ...s, absent: true };
-            setData(nd);
-            await del();
-            return;
-        } else if (t && s.created_by !== decodeJwt(t).user) {
-            alert('他人のシフトは変更できません'); // todo: replace
-            setData([...data]);
-            return;
-        }
         setData(data.filter((x) => x.id !== s.id));
-        await del();
+        const ret = await deleteSchedule(s.id);
+        if (!ret && !t) {
+            history.push('/login');
+        }
+    }, [data, history]);
+
+    const onDisable = useCallback(async (s: Shift) => {
+        const i = data.findIndex((x) => x.id === s.id);
+        let nd = [...data];
+        nd[i] = { ...s, enable: false };
+        setData(nd);
+        let ret = await Utils.disableSchedule(s.id);
+        const t = getToken();
+        if (!ret && !t) {
+            history.push('/login');
+        } else if (!ret) {
+            alert("error");
+        }
+    }, [data, history]);
+
+    const onPermit = useCallback(async (s: Shift) => {
+        const i = data.findIndex((x) => x.id === s.id);
+        let nd = [...data];
+        nd[i] = { ...s, permitted: true };
+        setData(nd);
+        let ret = await Utils.permitSchedule(s.id);
+        const t = getToken();
+        if (!ret && !t) {
+            history.push('/login');
+        } else if (!ret) {
+            alert("error");
+        }
+    }, [data, history]);
+
+    const onAbsent = useCallback(async (s: Shift) => {
+        const t = getToken();
+        const i = data.findIndex((x) => x.id === s.id);
+        let nd = [...data];
+        if (t && decodeJwt(t).isadmin) {
+            nd[i] = { ...s, absent: false };
+        } else {
+            nd[i] = { ...s, absent: true };
+        }
+        setData(nd);
+        let ret = await Utils.absentSchedule(s.id);
+        if (!ret && !t) {
+            history.push('/login');
+        } else if (!ret) {
+            alert("error");
+        }
     }, [data, history]);
 
     const onUp = useCallback(async (s: Shift) => {
@@ -280,7 +314,7 @@ export default function Schedule() {
         }
         const t = getToken();
         if (t && s.created_by !== decodeJwt(t).user) {
-            alert('他人のシフトは変更できません'); // todo: replace
+            alert('他人の作成したシフトは変更できません'); // todo: replace
             setData([...data]);
             return;
         }
@@ -397,8 +431,23 @@ export default function Schedule() {
             await onDelete(sch.current);
         }
 
+        const disableSft = async () => {
+            await onDisable(sch.current);
+        }
+
+        const permitSft = async () => {
+            await onPermit(sch.current);
+        }
+
+        const absentSft = async () => {
+            await onAbsent(sch.current);
+        }
+
         const open = Boolean(anchorEl);
         const id = open ? `multibox-popover${sft.id}` : undefined;
+        const token = getToken();
+        const isadmin = token ? decodeJwt(token).isadmin : false;
+        const user = token ? decodeJwt(token).user : undefined;
 
         return (
             <div>
@@ -425,9 +474,34 @@ export default function Schedule() {
                     }}
                 >
                     <Toolbar style={{ justifyContent: "flex-end" }}>
-                        <IconButton color="inherit" onClick={deleteSft}>
-                            <DeleteIcon />
-                        </IconButton>
+                        {
+                            sft.enable && !sft.permitted && (isadmin || (sft.created_by !== sft.username && sft.username === user)) ?
+                                <IconButton color="inherit" onClick={disableSft}>
+                                    <BlockIcon />
+                                </IconButton>
+                                : undefined
+                        }
+                        {
+                            sft.enable && !sft.permitted && sft.created_by === user ?
+                                <IconButton color="inherit" onClick={deleteSft}>
+                                    <DeleteIcon />
+                                </IconButton>
+                                : undefined
+                        }
+                        {
+                            sft.enable && sft.permitted && sft.username === user ?
+                                <IconButton color="inherit" onClick={absentSft}>
+                                    <HealingIcon />
+                                </IconButton>
+                                : undefined
+                        }
+                        {
+                            sft.enable && !sft.permitted && (isadmin || sft.username === user) ?
+                                <IconButton color="inherit" onClick={permitSft}>
+                                    <AssignmentIcon />
+                                </IconButton>
+                                : undefined
+                        }
                         <IconButton color="inherit" onClick={handleClose}>
                             <CloseIcon />
                         </IconButton>
@@ -439,6 +513,12 @@ export default function Schedule() {
                         </Grid>
                     </MuiPickersUtilsProvider>
                     <Typography>{sft.username}</Typography>
+                    <Typography>{sft.created_by}</Typography>
+                    <Typography>{sft.permitted.toString()}</Typography>
+                    <Typography>{sft.absent.toString()}</Typography>
+                    <Typography>{sft.enable.toString()}</Typography>
+                    {!sft.enable ? <Typography>拒否</Typography> : undefined}
+                    {sft.absent ? <Typography>欠勤希望</Typography> : undefined}
                 </Popover>
             </div>
         );
