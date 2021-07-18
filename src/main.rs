@@ -1,7 +1,6 @@
 use actix_files::{Files, NamedFile};
-use actix_web::HttpResponse;
 use actix_web::{dev::HttpResponseBuilder, http::header, http::StatusCode};
-use actix_web::{error, web, App, HttpRequest, HttpServer, Responder, Result};
+use actix_web::{error, web, App, HttpRequest, HttpResponse, HttpServer, Responder, Result};
 use chrono::prelude::*;
 use chrono::{Duration, NaiveDate};
 use derive_more::{Display, Error};
@@ -670,13 +669,14 @@ async fn main() -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use actix_web::test::read_body_json;
-    use actix_web::{http::header, http::StatusCode};
-    use actix_web::{test, App};
+    use actix_web::{
+        http::{header, StatusCode},
+        test::{self, read_body_json},
+        App,
+    };
     use chrono::Duration;
     use kintai::establish_connection;
     use serde_json::{json, Value};
-    use std::io::Write;
     use uuid::Uuid;
 
     #[actix_rt::test]
