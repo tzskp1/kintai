@@ -209,3 +209,21 @@ export const permitSchedule = async (id: number) =>
 
 export const absentSchedule = async (id: number) =>
     await touchSchedule(`/api/schedules/${id}/absence`);
+
+export const postUser = async (username: string, isadmin: boolean) => {
+    let token = getToken();
+    if (!token) return undefined;
+    let res = await fetch("/api/users", {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': "bearer " + token,
+        },
+        body: JSON.stringify({ id: username, isadmin })
+    });
+    if (res.ok) {
+        return await res.json();
+    } else {
+        return undefined;
+    }
+};
