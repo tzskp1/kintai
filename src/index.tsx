@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom';
 import Schedule from './Schedule';
 import Login from './Login';
+import User from './User';
 import reportWebVitals from './reportWebVitals';
 import { BrowserRouter, Route, Switch, Redirect } from "react-router-dom";
 import { createTheme } from "@material-ui/core/styles";
@@ -39,7 +40,7 @@ ReactDOM.render(
         <BrowserRouter>
             <Switch>
                 <Route path="/schedules" component={Schedule} />
-                <Route path="/users" component={Schedule} />
+                <Route path="/users" component={User} />
                 <Route path="/admin" component={Schedule} />
                 <Route path="/login" component={Login} />
                 <Redirect from="/" to="/login" />

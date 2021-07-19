@@ -9,6 +9,7 @@ import InboxIcon from '@material-ui/icons/MoveToInbox';
 import CloseIcon from '@material-ui/icons/Close';
 import HealingIcon from '@material-ui/icons/Healing';
 import AssignmentIcon from '@material-ui/icons/Assignment';
+import PersonIcon from '@material-ui/icons/Person';
 import List from '@material-ui/core/List';
 import ListItem from '@material-ui/core/ListItem';
 import ListItemIcon from '@material-ui/core/ListItemIcon';
@@ -335,6 +336,10 @@ export default function Schedule() {
         }
     }, [history, data]);
 
+    const token = getToken();
+    const isadmin = token ? decodeJwt(token).isadmin : false;
+    const user = token ? decodeJwt(token).user : undefined;
+
     const MultiBox = ({ shift }: { shift: Shift }) => {
         const [sft, setSft] = useState(shift);
         const sch = useRef(shift);
@@ -452,9 +457,6 @@ export default function Schedule() {
 
         const open = Boolean(anchorEl);
         const id = open ? `multibox-popover${sft.id}` : undefined;
-        const token = getToken();
-        const isadmin = token ? decodeJwt(token).isadmin : false;
-        const user = token ? decodeJwt(token).user : undefined;
 
         return (
             <div>
@@ -496,14 +498,14 @@ export default function Schedule() {
                                 : undefined
                         }
                         {
-                            sft.enable && sft.permitted && sft.username === user ?
+                            sft.enable && sft.permitted && ((sft.username === user && !sft.absent) || (isadmin && sft.absent)) ?
                                 <IconButton color="inherit" onClick={absentSft}>
                                     <HealingIcon />
                                 </IconButton>
                                 : undefined
                         }
                         {
-                            sft.enable && !sft.permitted && (isadmin || sft.username === user) ?
+                            sft.enable && !sft.permitted && (isadmin || (sft.created_by !== sft.username && sft.username === user)) ?
                                 <IconButton color="inherit" onClick={permitSft}>
                                     <AssignmentIcon />
                                 </IconButton>
@@ -585,6 +587,12 @@ export default function Schedule() {
                 <IconButton color="inherit" onClick={next}>
                     <NavigateNextIcon />
                 </IconButton>
+                {isadmin ?
+                    <IconButton color="inherit" onClick={() => history.push('/users')}>
+                        <PersonIcon />
+                    </IconButton>
+                    : undefined
+                }
             </Toolbar>
             <Paper ref={ref}>
                 <Table>
