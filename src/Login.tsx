@@ -37,7 +37,7 @@ const useStyles = makeStyles((theme) => ({
     },
 }));
 
-export default function SignIn({ }) {
+export default function SignIn() {
     const history = useHistory();
     const classes = useStyles();
     const [email, setEmail] = useState('');
@@ -84,6 +84,7 @@ export default function SignIn({ }) {
                         autoComplete="current-password"
                         onChange={(e) => setPass(e.target.value)}
                     />
+                    <Alert severity="info">ID: root password: pass</Alert>
                     {error ? <Alert severity="error">ユーザー名かパスワードが異なります</Alert> : undefined}
                     <Button
                         type="submit"
