@@ -646,9 +646,7 @@ fn config(cfg: &mut web::ServiceConfig) {
         .service(web::resource("/api/users/{id}").route(web::delete().to(delete_user)))
         .route("/api/users/me/password", web::patch().to(update_password))
         .route("/api/users", web::post().to(add_user))
-        .route("/api/users", web::get().to(get_users))
-        .service(Files::new("/", "./build").prefer_utf8(true))
-        .route("*", web::get().to(index));
+        .route("/api/users", web::get().to(get_users));
 }
 
 #[actix_web::main]
@@ -662,7 +660,19 @@ async fn main() -> std::io::Result<()> {
     let pg = create_pg();
     HttpServer::new(move || {
         App::new()
+            .route("/", web::get().to(index))
             .configure(config)
+            .service(
+                Files::new("/asset-manifest.json", "./build/asset-manifest.json").prefer_utf8(true),
+            )
+            .service(Files::new("/favicon.ico", "./build/favicon.ico").prefer_utf8(true))
+            .service(Files::new("/index.html", "./build/index.html").prefer_utf8(true))
+            .service(Files::new("/logo192.png", "./build/logo192.png").prefer_utf8(true))
+            .service(Files::new("/logo512.png", "./build/logo512.png").prefer_utf8(true))
+            .service(Files::new("/manifest.json", "./build/manifest.json").prefer_utf8(true))
+            .service(Files::new("/robots.txt", "./build/robots.txt").prefer_utf8(true))
+            .service(Files::new("/static", "./build/static").prefer_utf8(true))
+            .default_service(web::route().to(index))
             .data(pool.clone())
             .data(pg.clone())
     })
