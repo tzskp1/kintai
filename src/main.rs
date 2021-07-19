@@ -647,8 +647,8 @@ fn config(cfg: &mut web::ServiceConfig) {
         .route("/api/users/me/password", web::patch().to(update_password))
         .route("/api/users", web::post().to(add_user))
         .route("/api/users", web::get().to(get_users))
-        .route("/", web::get().to(index))
-        .service(Files::new("/", "./build").prefer_utf8(true));
+        .service(Files::new("/", "./build").prefer_utf8(true))
+        .route("*", web::get().to(index));
 }
 
 #[actix_web::main]
