@@ -15,6 +15,8 @@ table! {
     users (id) {
         id -> Varchar,
         pass -> Varchar,
+        first_name -> Nullable<Varchar>,
+        last_name -> Nullable<Varchar>,
         isadmin -> Bool,
     }
 }

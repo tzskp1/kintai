@@ -210,7 +210,7 @@ async fn add_user(
                 let np = pg
                     .generate_one()
                     .map_err(|_| error::Error::from(ServerError::InternalError))?;
-                let ret = create_user(&conn, &nu.id, &np, &nu.isadmin)
+                let ret = create_user(&conn, &nu.id, &np, &nu.isadmin, None, None)
                     .map_err(|x| error::Error::from(ServerError::CreateUserError(x)))
                     .map(|u| {
                         HttpResponse::Ok()

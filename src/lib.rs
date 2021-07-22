@@ -48,6 +48,8 @@ pub fn create_user<'a>(
     id: &'a str,
     pass: &'a str,
     isadmin: &'a bool,
+    first_name: Option<&'a str>,
+    last_name: Option<&'a str>,
 ) -> Result<User, CreateUserError> {
     use schema::users;
     let hashed = hash(pass, DEFAULT_COST).or_else(|x| Err(CreateUserError::HashError(x)))?;
@@ -55,6 +57,8 @@ pub fn create_user<'a>(
     let new_user = NewUser {
         id,
         pass: &hashed,
+        first_name,
+        last_name,
         isadmin,
     };
 

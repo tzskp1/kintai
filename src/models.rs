@@ -2,6 +2,8 @@
 pub struct User {
     pub id: String,
     pub pass: String,
+    pub first_name: Option<String>,
+    pub last_name: Option<String>,
     pub isadmin: bool,
 }
 
@@ -12,6 +14,8 @@ use super::schema::users;
 pub struct NewUser<'a> {
     pub id: &'a str,
     pub pass: &'a str,
+    pub first_name: Option<&'a str>,
+    pub last_name: Option<&'a str>,
     pub isadmin: &'a bool,
 }
 
